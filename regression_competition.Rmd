@@ -38,6 +38,8 @@ ggplot() +
   labs(title = "Map of Madrid with Points Colored by Value",
        x = "Longitude", y = "Latitude") +
   theme_minimal()
+
+### Done with teh help of ChatGPT
 ```
 
 
