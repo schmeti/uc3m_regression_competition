@@ -8,22 +8,38 @@ date: "2024-11-11"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Map of Madrid with points and color indicating prizes
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(readxl)
+data_train <- read_excel("data_train.xlsx")
 ```
 
-## Including Plots
+```{r}
+install.packages(c("ggplot2", "sf", "dplyr"))
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+# Load libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
+
+# Download the map of Madrid (use a simple shapefile, for example)
+madrid_map <- st_read("C:/Users/Nicolás/Desktop/GitHub/uc3m_regression_competition/madrid.geojson")
+
+# Plot the map with the points colored by the 'value' variable
+ggplot() +
+  geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
+  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 3) +  # Plot points
+  scale_color_viridis_c() +  # Use color scale for the variable
+  labs(title = "Map of Madrid with Points Colored by Value",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+
+
+
