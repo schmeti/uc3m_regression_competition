@@ -12,11 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(readxl)
-data_train <- read_excel("data_train.xlsx")
+data_train <- read_excel("Data/data_train.xlsx")
 ```
 
 ```{r}
-install.packages(c("ggplot2", "sf", "dplyr"))
+#install.packages(c("ggplot2", "sf", "dplyr"))
 
 # Load libraries
 library(ggplot2)
@@ -28,7 +28,7 @@ library(dplyr)
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
 
 # Download the map of Madrid (use a simple shapefile, for example)
-madrid_map <- st_read("C:/Users/Nicolás/Desktop/GitHub/uc3m_regression_competition/madrid.geojson")
+madrid_map <- st_read("Data/madrid.geojson")
 
 # Plot the map with the points colored by the 'value' variable
 ggplot() +
