@@ -26,18 +26,20 @@ library(dplyr)
 
 ```{r}
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
-
+points_sf <- points_sf[order(points_sf$precio.house.m2), ]
 # Download the map of Madrid (use a simple shapefile, for example)
 madrid_map <- st_read("C:/Users/Nicolás/Desktop/GitHub/uc3m_regression_competition/madrid.geojson")
 
 # Plot the map with the points colored by the 'value' variable
 ggplot() +
   geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
-  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 3) +  # Plot points
-  scale_color_viridis_c() +  # Use color scale for the variable
-  labs(title = "Map of Madrid with Points Colored by Value",
+  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 1.5) +  # Plot points
+  scale_color_gradient(low = "#00C5CD", high = "red") +
+  labs(title = "Spatial situation and price",
        x = "Longitude", y = "Latitude") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+
 
 ### Done with teh help of ChatGPT
 ```
