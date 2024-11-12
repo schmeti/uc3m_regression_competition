@@ -22,7 +22,169 @@ data_train <- read_excel("Data/data_train.xlsx")
 library(ggplot2)
 library(sf)
 library(dplyr)
+library(GGally)
+library(dplyr)
+
 ```
+# Exploratory Analysis
+
+
+| **Category** | **Variable**                | **Description**                                                                                                     |
+|--------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------|
+| Continuous   | precio.house.m2             | Property sale price in euros per square meter                                                                      |
+|              | antig                       | Age of the property (years)                                                                                        |
+|              | Ruidos_ext                  | External noise (%)                                                                                                 |
+|              | Mal_olor                    | Pollution or bad odors (%)                                                                                         |
+|              | Poca_limp                   | Lack of street cleanliness (%)                                                                                     |
+|              | Malas_comunic               | Poor communications (%)                                                                                            |
+|              | Pocas_zonas                 | Few green spaces (%)                                                                                               |
+|              | Delincuencia                | Crime (%)                                                                                                          |
+|              | CO                          | Level of CO in the air at the property's coordinates (standardized values)                                         |
+|              | NO2                         | Level of NO2 in the air at the property's coordinates (standardized values)                                        |
+|              | Nox                         | Level of Nox in the air at the property's coordinates (standardized values)                                        |
+|              | O3                          | Level of O3 in the air at the property's coordinates (standardized values)                                         |
+|              | SO2                         | Level of SO2 in the air at the property's coordinates (standardized values)                                        |
+|              | PM10                        | Level of CO in the air at the property's coordinates (standardized values)                                         |
+|              | Pobl.0_14_div_Poblac.Total  | Percentage of children between 0 and 14 years in the district                                                     |
+|              | PoblJubilada_div_Poblac.Total | Percentage of retired population in the district                                                                 |
+|              | Inmigrantes.porc            | Percentage of immigrant population in the district                                                                |
+|              | sup.const                   | Built area of the property                                                                                        |
+|              | sup.util                    | Usable area of the property                                                                                       |
+| Categorical  | barrio/cod_barrio           | Code or name of the neighborhood in the city of Madrid                                                            |
+|              | distrito/cod_distrito       | Code or name of the district in the city of Madrid                                                                |
+|              | longitud/latitud            | Geographical coordinates of the property (longitude and latitude)                                                 |
+|              | dorm                        | Number of bedrooms                                                                                                |
+|              | banos                       | Number of bathrooms                                                                                               |
+|              | tipo.casa                   | Type of property                                                                                                  |
+|              | estado                      | Condition of the property                                                                                         |
+| Binary       | inter.exter                 | Interior or exterior design of the property                                                                       |
+|              | ascensor                    | Elevator availability in the building                                                                             |
+|              | comercial                   | Indicates if the property is located in a commercial area                                                         |
+|              | casco.historico             | Indicates if the property is in Madrid's historic center                                                          |
+|              | M.30                        | Indicates if the property is within the M-30                                                                      |
+| Identifier   | ref.hip.zona                | Mortgage reference of the area                                                                                    |
+|              | train_indices               | ID of the observation                                                                                              |
+
+```{r}
+colnames(data_train)
+```
+
+```{r}
+# turn identifiers into strings to prevent errors
+data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ", "casco.historico", "M.30","comercial")] <- lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona", "casco.historico", "M.30","comercial")], as.character)
+```
+
+
+```{r}
+unique_counts <- data.frame(
+  Column = names(data_train),
+  Unique_Values = sapply(data_train, function(x) length(unique(x)))
+)
+unique_counts
+```
+## Frequency Analysis
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+
+plot_hist = function(data_train, type = "both", n, m) {
+
+  # Configure subplots
+  par(mfrow = c(n, m),mar = c(10, 4, 4, 1))
+  
+  # Loop through columns
+  for (col in colnames(data_train)) {
+    # plot numeric columns
+    if (is.numeric(data_train[[col]]) && (type == "numeric" || type == "both")) {
+      
+      # Create histograms
+      hist(data_train[[col]], 
+           main = paste(col), 
+           xlab = "",
+           col = "dodgerblue4")
+      
+      # plot non-numeric columns
+    } else if (!is.numeric(data_train[[col]]) && (type == "categoric" 
+                                            || type == "both")) {
+      # Adjust x-axis label arrangement for specific cols
+      barplot(table(data_train[[col]]), 
+              main = paste(col), 
+              xlab = "", 
+              col = "dodgerblue",
+              las = 2)
+    }
+  }
+  
+  # Reset the plotting layout
+  par(mfrow = c(1, 1))
+}
+
+```
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+# Numeric hist
+plot_hist(data = data_train ,type="numeric", n=3, m=2)
+```
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+# Numeric hist
+plot_hist(data = data_train ,type="categoric", n=3, m=2)
+```
+TODO: Conditional histograms for categoricals (barrios)
+
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+# Install and load necessary packages
+library(reshape2)
+library(ggplot2)
+library(GGally) # This is required for ggpairs
+
+# Compute correlation matrix
+numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
+corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
+melted_corr_mat <- melt(corr_mat)
+
+# Plot correlation heatmap
+ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
+  geom_tile() +
+  geom_text(aes(label = value), color = "black", size = 4)+
+  scale_fill_gradient(low = "white", high = "red") +
+  theme_minimal()
+
+
+# Pairplot using ggpairs
+#ggpairs(data_train[, numeric_column_names], 
+#        aes(color = data_train$group_var)) 
+```
+### Multivariate
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+average_price_per_barrio <- data_train %>%
+  group_by(barrio) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_barrio, aes(x = reorder(barrio, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by Barrio",
+       x = "Barrio",
+       y = "Average Price per 2m") +
+  theme_minimal()
+```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+average_price_per_district <- data_train %>%
+  group_by(distrito) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by District",
+       x = "District",
+       y = "Average Price per 2m") +
+  theme_minimal()
+```
+
 
 ```{r}
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
@@ -43,7 +205,4 @@ ggplot() +
 
 ### Done with teh help of ChatGPT
 ```
-
-
-
 
