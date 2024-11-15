@@ -23,7 +23,6 @@ library(ggplot2)
 library(sf)
 library(dplyr)
 library(GGally)
-library(dplyr)
 
 ```
 # Exploratory Analysis
@@ -69,6 +68,7 @@ library(dplyr)
 colnames(data_train)
 ```
 
+
 ```{r}
 # turn identifiers into strings to prevent errors
 data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ", "casco.historico", "M.30","comercial")] <- lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona", "casco.historico", "M.30","comercial")], as.character)
@@ -82,6 +82,11 @@ unique_counts <- data.frame(
 )
 unique_counts
 ```
+
+```{r}
+summary(data_train)
+```
+
 ## Frequency Analysis
 
 ```{r, fig.width=8.27, fig.height=10, out.width='100%'}
@@ -152,8 +157,7 @@ ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) +
 
 
 # Pairplot using ggpairs
-#ggpairs(data_train[, numeric_column_names], 
-#        aes(color = data_train$group_var)) 
+ggpairs(data_train[, numeric_column_names])
 ```
 ### Multivariate
 
@@ -205,4 +209,23 @@ ggplot() +
 
 ### Done with teh help of ChatGPT
 ```
+# Forecasting pipeline
+
+## Preprocess
+
+
+```{r}
+
+regfit <- regsubsets(precio.house.m2 ~ ., data = data_train,really.big=T)
+
+# Summary of the results
+summary(regfit)
+```
+
+## Fit & Predict
+
+## Score
+
+
+
 
