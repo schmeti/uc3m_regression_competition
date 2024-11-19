@@ -10,6 +10,14 @@ train_test_split <- function(data) {
   return(list(data_train = data_train, data_test = data_test))
 }
 
+# K-Fold 
+k_fold <- function(data, k = 10) {
+  train_index <- createDataPartition(data$precio.house.m2, p = 0.7, list = FALSE)
+  data_train <- data[train_index, ]
+  data_test <- data[-train_index, ]
+  return(list(data_train = data_train, data_test = data_test))
+}
+
 # Preprocess
 preprocess = function(data){
   data_processesd = data
