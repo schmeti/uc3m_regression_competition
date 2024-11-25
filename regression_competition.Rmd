@@ -199,6 +199,13 @@ ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) +
   scale_fill_gradient(low = "white", high = "red") +
   theme_minimal()
 
+library(ggcorrplot)
+p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+               hc.order = TRUE) + 
+  theme(axis.text.x = element_text(size = 7)) + 
+  theme(axis.text.y = element_text(size = 7))
+ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10, units = "in", dpi = 300)
+
 
 # Pairplot using ggpairs
 ggpairs(data_train[, numeric_column_names])
@@ -234,22 +241,72 @@ ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y =
 ```
 
 
-```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
-points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
+
+```{r}
+# creacion de una nueva variable
+data_tr_new <- data_train
+data_tr_new$sup.const<-NULL
+library(geosphere)
+
+centro <- c(-3.6946, 40.4190)  # Longitude, Latitude
+data_tr_new$radio <- distHaversine(
+  cbind(data_tr_new$longitud, data_tr_new$latitud),
+  centro
+)
+data_tr_new$precio.house.m2 <- log(data_tr_new$precio.house.m2)
+numeric_column_names <- names(data_tr_new)[sapply(data_tr_new, is.numeric)]
+corr_mat <- round(cor(data_tr_new[, numeric_column_names]), 2)
+ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+               hc.order = TRUE) + 
+  theme(axis.text.x = element_text(size = 7)) + 
+  theme(axis.text.y = element_text(size = 7))
+```
+```{r,  fig.width=30, fig.height=20, out.width='100%'}
+points_sf <- st_as_sf(data_tr_new, coords = c("longitud", "latitud"), crs = 4326)
 points_sf <- points_sf[order(points_sf$precio.house.m2), ]
 # Download the map of Madrid (use a simple shapefile, for example)
 madrid_map <- st_read("Data/madrid.geojson")
+centro <- st_as_sf(data.frame(longitud = -3.6946, latitud = 40.4190), 
+                   coords = c("longitud", "latitud"), 
+                   crs = 4326)
 
 # Plot the map with the points colored by the 'value' variable
-ggplot() +
+mapa <- ggplot() +
   geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
-  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 4) +  # Plot points
+  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 5) +  # Plot points
+  geom_sf(data = centro, color = "yellow", size = 10) + # Plot center
   scale_color_gradient(low = "#00C5CD", high = "red") +
   labs(title = "Spatial situation and price",
        x = "Longitude", y = "Latitude") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
 
+plot(mapa)
+```
+
+
+
+```{r,  fig.width=30, fig.height=20, out.width='100%'}
+points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
+points_sf <- points_sf[order(points_sf$precio.house.m2), ]
+# Download the map of Madrid (use a simple shapefile, for example)
+madrid_map <- st_read("Data/madrid.geojson")
+centro <- st_as_sf(data.frame(longitud = -3.6946, latitud = 40.4190), 
+                   coords = c("longitud", "latitud"), 
+                   crs = 4326)
+
+# Plot the map with the points colored by the 'value' variable
+mapa <- ggplot() +
+  geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
+  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 5) +  # Plot points
+  geom_sf(data = centro, color = "yellow", size = 10) + # Plot center
+  scale_color_gradient(low = "#00C5CD", high = "red") +
+  labs(title = "Spatial situation and price",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+
+plot(mapa)
 
 ### Done with teh help of ChatGPT
 ```

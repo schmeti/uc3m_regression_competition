@@ -10,6 +10,59 @@ train_test_split <- function(data) {
   return(list(data_train = data_train, data_test = data_test))
 }
 
+# K-Fold -----------------------------------------------------------------------
+if(!require(groupdata2)) install.packages("groupdata2")
+library(groupdata2)
+
+k_fold <- function(data, k = 10) {
+  # Identify numerical and categorical variables
+  num_id <- sapply(data, is.numeric)
+  num_vars <- names(data)[num_id]
+  cat_vars <- names(data)[!num_id]
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in "precio.house.m2"
+  folded_data <- fold(data, k = k, cat_col = cat_vars, num_col = "precio.house.m2")
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+# K-fold cross-validation ------------------------------------------------------
+k_fold_cv <- function(model, data_train, k =10){
+    
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train, k = k)$.fold
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse <- numeric(k)
+    
+  for (i in 1:k){
+    train_id <- (1:k)[-i] # Train folds
+    test_id <- i          # Test folds
+    
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_model(temp_train)
+    temp_predictions <- predict(model, newdata = temp_test)
+    
+    # Calculate error metrics and store them
+    cv_rmse[i] <- sqrt(mean((predictions - temp_test$precio.house.m2)^2))
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(cv_rmse)
+}
+# ------------------------------------------------------------------------------
+
+
+
+
 # Preprocess
 preprocess = function(data){
   data_processesd = data
