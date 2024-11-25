@@ -135,6 +135,50 @@ plot_hist(data = data_train ,type="numeric", n=3, m=2)
 plot_hist(data = data_train ,type="categoric", n=3, m=2)
 ```
 TODO: Conditional histograms for categoricals (barrios)
+```{r warning=FALSE,fig.width=12, fig.height=6, out.width='100%'}
+# Compute correlation matrix
+# Convert Categorical Variables to Numeric Using Label Encoding
+data_encoded <- data_train %>%
+  mutate(across(where(is.character), ~ as.numeric(factor(.))))
+
+# Compute the correlation matrix
+correlations <- cor(data_encoded)
+
+# Check if 'precio.house.m2' exists
+if ("precio.house.m2" %in% colnames(correlations)) {
+  # Extract the row corresponding to 'precio.house.m2'
+  price_per_sqm_corr <- correlations["precio.house.m2", ]
+  
+  # Convert to data frame for plotting
+  price_per_sqm_corr_df <- data.frame(
+    Variable = names(price_per_sqm_corr),
+    Correlation = price_per_sqm_corr
+  )
+  
+  # Plot the correlations
+  library(ggplot2)
+  ggplot(price_per_sqm_corr_df, aes(x = reorder(Variable, Correlation), y = Correlation)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() + # Flip coordinates for easier readability
+    theme_minimal() +
+    labs(
+      title = "Correlation with price_per_sqm",
+      x = "Variable",
+      y = "Correlation"
+    )
+} else {
+  stop("precio.house.m2 not found in correlation matrix.")
+}
+
+```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+library(corrplot)
+# Plot
+corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper", 
+         order = "hclust", tl.col = "black", tl.srt = 45)
+```
+
 
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
@@ -175,7 +219,7 @@ ggplot(average_price_per_barrio, aes(x = reorder(barrio, average_price), y = ave
   theme_minimal()
 ```
 
-```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+```{r warning=FALSE,fig.width=20, fig.height=10, out.width='100%'}
 average_price_per_district <- data_train %>%
   group_by(distrito) %>%
   summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
@@ -190,7 +234,7 @@ ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y =
 ```
 
 
-```{r}
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
 points_sf <- points_sf[order(points_sf$precio.house.m2), ]
 # Download the map of Madrid (use a simple shapefile, for example)
@@ -199,7 +243,7 @@ madrid_map <- st_read("Data/madrid.geojson")
 # Plot the map with the points colored by the 'value' variable
 ggplot() +
   geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
-  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 1.5) +  # Plot points
+  geom_sf(data = points_sf, aes(color = precio.house.m2), size = 4) +  # Plot points
   scale_color_gradient(low = "#00C5CD", high = "red") +
   labs(title = "Spatial situation and price",
        x = "Longitude", y = "Latitude") +
