@@ -1,6 +1,8 @@
 library(readxl)
 library(leaps)
 library(caret)
+library(lubridate)
+
 
 # Test/Train Split
 train_test_split <- function(data) {
@@ -29,6 +31,7 @@ k_fold <- function(data, k = 10) {
   # Return the new dataset
   return(folded_data)
 }
+
 
 # K-fold cross-validation ------------------------------------------------------
 k_fold_cv <- function(model, data_train, k =10){
@@ -90,30 +93,54 @@ predict_and_score = function(model, data_test, print = FALSE) {
 }
 
 ### Run Pipeline
-run_pipeline = function(data){
+run_pipeline = function(data, 
+                        store_model = FALSE,
+                        store_model_name = "linear_model",
+                        load_model_path = ""){
   
-  # TODO: Fix train,test split
-  #data_split = train_test_split(data)
-  #data_train = data_split$data_train
-  #data_test = data_split$data_test
+  ### pipeline
   
   data_train = data
   data_test = data
   
-  
   # preprocess
   data_processesd = preprocess(data = data_train)
   
-  # fit model
-  model = fit_model(data_train = data_processesd)
+  # fit/load model
+  load_model_path <- trimws(load_model_path)
+  if (!is.null(load_model_path) && load_model_path != "") {
+    model = readRDS(load_model_path)
+    print("Model loaded successfully")
+  } else {
+    print("Fitting a new model.")
+    model = fit_model(data_train = data_processesd)
+  }
+  
+
   
   # predict and score
   score = predict_and_score(model = model,data_test = data_test)
+  
+  ### further features
+  
+  # save model
+  if(store_model){
+    # Save model with a properly constructed path using file.path()
+    #model_file_path <- file.path("models", paste0(store_model_name, "_", gsub("[:/ ]", "_", Sys.time()), ".rds"))
+    current_time <- Sys.time()
+    model_file_path <- file.path("models", paste0(store_model_name, "_",gsub(" ","_",as.POSIXct(format(current_time, "%Y-%m-%d %H-%M"))),".rds"))
+    saveRDS(model, file = model_file_path)
+    print(paste("Model saved to", model_file_path))
+  }
+
   
   print(score)
 }
 
 # execute
 data <- read_excel("Data/data_train.xlsx")
-run_pipeline(data)
+run_pipeline(data,
+             store_model = F,
+             load_model_path = "models/linear_model_2024-11-25.rds"
+             )
 
