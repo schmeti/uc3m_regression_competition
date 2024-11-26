@@ -253,7 +253,8 @@ data_tr_new$radio <- distHaversine(
   cbind(data_tr_new$longitud, data_tr_new$latitud),
   centro
 )
-data_tr_new$precio.house.m2 <- log(data_tr_new$precio.house.m2)
+# logarithmic objective
+data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2)
 numeric_column_names <- names(data_tr_new)[sapply(data_tr_new, is.numeric)]
 corr_mat <- round(cor(data_tr_new[, numeric_column_names]), 2)
 ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),

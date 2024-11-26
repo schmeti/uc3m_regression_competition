@@ -3,6 +3,58 @@ library(leaps)
 library(caret)
 library(lubridate)
 
+# Initial Transformations of the data ------------------------------------------
+if(!require(geosphere)) install.packages("geosphere")
+library(geosphere)
+
+initial_transformation <- function(data){
+  data_tr_new <- data
+  
+  # Eliminate sup.const for collinearity reasons
+  data_tr_new$sup.const <- NULL
+  
+  # Create the new variable radius
+  centro <- c(-3.6946, 40.4190)  # Longitude, Latitude of the
+  data_tr_new$radius <- distHaversine(
+    cbind(data_tr_new$longitud, data_tr_new$latitud),
+    centro
+  )
+  
+  # Logarithmic objective variable
+  data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2) 
+  data_tr_new$precio.house.m2 <- NULL # Eliminate the old variable
+  
+  return(data_tr_new)
+}
+
+# Multicollinearity Analysis
+if(!require(car)) install.packages("car")
+library(car)
+
+multicollinearity_analysis <- function(data){
+  
+  # Obtain the numeric 'section' of the data matrix
+  numeric_column_names <- names(data)[sapply(data, is.numeric)]
+  X <- as.matrix(data[, numeric_column_names])
+
+  # Condition number
+  lambda <- eigen(t(X)%*%X)$values # Eigenvalues
+  
+  if (min(lambda) <= 10^{-5}){
+    cn <- Inf
+  } else{
+    cn <- sqrt(max(lambda)/min(lambda))
+  }
+  
+  # VIF 
+  model <- lm(log.precio.house.m2 ~ ., data = as.data.frame(X))
+  vif <- vif(model)
+  
+  # Return a list with the parameters
+  return(list(CN = cn, VIF = vif))
+}
+#-------------------------------------------------------------------------------
+
 
 # Test/Train Split
 train_test_split <- function(data) {
