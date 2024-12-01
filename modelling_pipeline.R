@@ -2,6 +2,8 @@ library(readxl)
 library(leaps)
 library(caret)
 library(lubridate)
+library(dplyr)
+
 
 # Initial Transformations of the data ------------------------------------------
 if(!require(geosphere)) install.packages("geosphere")
@@ -131,15 +133,31 @@ fit_model = function(data_train){
 }
 
 # Predict and score
-predict_and_score = function(model, data_test, print = FALSE) {
-  # predict
+predict_and_score = function(model, data_test, data_train, print = FALSE) {
+  ### predict
   predictions = predict(model, newdata = data_test)
   results = data_test %>% mutate(Predicted = predictions)
 
-  #score
-  rmse = sqrt(mean((predictions - data_test$precio.house.m2)^2))
+  ### score
+  n_test = nrow(data_test)
+  n_train = nrow(data_train)
+  num_predictors <- length(coef(model)) - 1
   
-  score = list(rmse = rmse)
+  # scoring on training data
+  SSE = sum((data_test$precio.house.m2 - predictions )^2)
+  SSR = sum((mean(data_test$precio.house.m2) - predictions)^2)
+  SST = SSE + SSE
+  
+  Rsq_adj = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
+  
+  # training on test data
+  rmse = sqrt(SSE/n_test)
+  
+  score = list(SSE = SSE,
+               SSR = SSR,
+               SST = SST,
+               Rsq_adj = Rsq_adj,
+               rmse = rmse)
   
   return(score)
 }
@@ -162,7 +180,7 @@ run_pipeline = function(data,
   load_model_path <- trimws(load_model_path)
   if (!is.null(load_model_path) && load_model_path != "") {
     model = readRDS(load_model_path)
-    print("Model loaded successfully")
+    print(paste("Model: ",load_model_path, " loaded successfully"))
   } else {
     print("Fitting a new model.")
     model = fit_model(data_train = data_processesd)
@@ -171,7 +189,7 @@ run_pipeline = function(data,
 
   
   # predict and score
-  score = predict_and_score(model = model,data_test = data_test)
+  score = predict_and_score(model = model, data_train=data_train, data_test = data_test)
   
   ### further features
   
