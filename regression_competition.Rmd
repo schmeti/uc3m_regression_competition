@@ -25,55 +25,65 @@ library(dplyr)
 library(GGally)
 
 ```
+
 # Exploratory Analysis
 
-
-| **Category** | **Variable**                | **Description**                                                                                                     |
-|--------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------|
-| Continuous   | precio.house.m2             | Property sale price in euros per square meter                                                                      |
-|              | antig                       | Age of the property (years)                                                                                        |
-|              | Ruidos_ext                  | External noise (%)                                                                                                 |
-|              | Mal_olor                    | Pollution or bad odors (%)                                                                                         |
-|              | Poca_limp                   | Lack of street cleanliness (%)                                                                                     |
-|              | Malas_comunic               | Poor communications (%)                                                                                            |
-|              | Pocas_zonas                 | Few green spaces (%)                                                                                               |
-|              | Delincuencia                | Crime (%)                                                                                                          |
-|              | CO                          | Level of CO in the air at the property's coordinates (standardized values)                                         |
-|              | NO2                         | Level of NO2 in the air at the property's coordinates (standardized values)                                        |
-|              | Nox                         | Level of Nox in the air at the property's coordinates (standardized values)                                        |
-|              | O3                          | Level of O3 in the air at the property's coordinates (standardized values)                                         |
-|              | SO2                         | Level of SO2 in the air at the property's coordinates (standardized values)                                        |
-|              | PM10                        | Level of CO in the air at the property's coordinates (standardized values)                                         |
-|              | Pobl.0_14_div_Poblac.Total  | Percentage of children between 0 and 14 years in the district                                                     |
-|              | PoblJubilada_div_Poblac.Total | Percentage of retired population in the district                                                                 |
-|              | Inmigrantes.porc            | Percentage of immigrant population in the district                                                                |
-|              | sup.const                   | Built area of the property                                                                                        |
-|              | sup.util                    | Usable area of the property                                                                                       |
-| Categorical  | barrio/cod_barrio           | Code or name of the neighborhood in the city of Madrid                                                            |
-|              | distrito/cod_distrito       | Code or name of the district in the city of Madrid                                                                |
-|              | longitud/latitud            | Geographical coordinates of the property (longitude and latitude)                                                 |
-|              | dorm                        | Number of bedrooms                                                                                                |
-|              | banos                       | Number of bathrooms                                                                                               |
-|              | tipo.casa                   | Type of property                                                                                                  |
-|              | estado                      | Condition of the property                                                                                         |
-| Binary       | inter.exter                 | Interior or exterior design of the property                                                                       |
-|              | ascensor                    | Elevator availability in the building                                                                             |
-|              | comercial                   | Indicates if the property is located in a commercial area                                                         |
-|              | casco.historico             | Indicates if the property is in Madrid's historic center                                                          |
-|              | M.30                        | Indicates if the property is within the M-30                                                                      |
-| Identifier   | ref.hip.zona                | Mortgage reference of the area                                                                                    |
-|              | train_indices               | ID of the observation                                                                                              |
+| **Category** | **Variable**                  | **Description**                                                             |
+|-------------------|-------------------|-----------------------------------|
+| Continuous   | precio.house.m2               | Property sale price in euros per square meter                               |
+|              | antig                         | Age of the property (years)                                                 |
+|              | Ruidos_ext                    | External noise (%)                                                          |
+|              | Mal_olor                      | Pollution or bad odors (%)                                                  |
+|              | Poca_limp                     | Lack of street cleanliness (%)                                              |
+|              | Malas_comunic                 | Poor communications (%)                                                     |
+|              | Pocas_zonas                   | Few green spaces (%)                                                        |
+|              | Delincuencia                  | Crime rate (%)                                                              |
+|              | CO                            | Level of CO in the air at the property's coordinates (standardized values)  |
+|              | NO2                           | Level of NO2 in the air at the property's coordinates (standardized values) |
+|              | Nox                           | Level of Nox in the air at the property's coordinates (standardized values) |
+|              | O3                            | Level of O3 in the air at the property's coordinates (standardized values)  |
+|              | SO2                           | Level of SO2 in the air at the property's coordinates (standardized values) |
+|              | PM10                          | Level of CO in the air at the property's coordinates (standardized values)  |
+|              | Pobl.0_14_div_Poblac.Total    | Percentage of children between 0 and 14 years in the district               |
+|              | PoblJubilada_div_Poblac.Total | Percentage of retired population in the district                            |
+|              | Inmigrantes.porc              | Percentage of immigrant population in the district                          |
+|              | sup.const                     | Built area of the property                                                  |
+|              | sup.util                      | Usable area of the property                                                 |
+| Categorical  | barrio/cod_barrio             | Code or name of the neighborhood in the city of Madrid                      |
+|              | distrito/cod_distrito         | Code or name of the district in the city of Madrid                          |
+|              | longitud/latitud              | Geographical coordinates of the property (longitude and latitude)           |
+|              | dorm                          | Number of bedrooms                                                          |
+|              | banos                         | Number of bathrooms                                                         |
+|              | tipo.casa                     | Type of property                                                            |
+|              | estado                        | Condition of the property                                                   |
+| Binary       | inter.exter                   | Interior or exterior design of the property                                 |
+|              | ascensor                      | Elevator availability in the building                                       |
+|              | comercial                     | Indicates if the property is located in a commercial area                   |
+|              | casco.historico               | Indicates if the property is in Madrid's historic center                    |
+|              | M.30                          | Indicates if the property is within the M-30                                |
+| Identifier   | ref.hip.zona                  | Mortgage reference of the area                                              |
+|              | train_indices                 | ID of the observation                                                       |
 
 ```{r}
 colnames(data_train)
 ```
 
+### Preprocessing
 
 ```{r}
 # turn identifiers into strings to prevent errors
-data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ", "casco.historico", "M.30","comercial")] <- lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona", "casco.historico", "M.30","comercial")], as.character)
-```
 
+# data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ", "casco.historico", "M.30","comercial")] <- lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona", "casco.historico", "M.30","comercial")], as.character)
+
+data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ")] = lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona")], as.character)
+
+cat.var = c("dorm", "banos", "tipo.casa", "inter.exter", "ascensor", "comercial",
+            "casco.historico", "M.30")
+data_train[, cat.var] = lapply(data_train[, cat.var], as.factor)
+
+num_id <- sapply(data_train, is.numeric)
+num_vars <- names(data_train)[num_id]
+```
 
 ```{r}
 unique_counts <- data.frame(
@@ -122,7 +132,6 @@ plot_hist = function(data_train, type = "both", n, m) {
   # Reset the plotting layout
   par(mfrow = c(1, 1))
 }
-
 ```
 
 ```{r, fig.width=8.27, fig.height=10, out.width='100%'}
@@ -134,7 +143,9 @@ plot_hist(data = data_train ,type="numeric", n=3, m=2)
 # Numeric hist
 plot_hist(data = data_train ,type="categoric", n=3, m=2)
 ```
+
 TODO: Conditional histograms for categoricals (barrios)
+
 ```{r warning=FALSE,fig.width=12, fig.height=6, out.width='100%'}
 # Compute correlation matrix
 # Convert Categorical Variables to Numeric Using Label Encoding
@@ -177,32 +188,112 @@ library(corrplot)
 # Plot
 corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper", 
          order = "hclust", tl.col = "black", tl.srt = 45)
+
 ```
 
+### Correlation metrics
 
+Lets check the correlation that exist between the variables, for the continuous variable we will compute the (Pearson's) correlation matrix and for the discrete ones we will consider the Cramér's V.
+
+$$ V = \sqrt{\frac{\chi^2}{n \cdot \min(r-1, c-1)}} \quad \text{where} \quad \chi^2 = \sum_{i,j} \frac{\left(n_{ij} - \frac{n_{i.} n_{.j}}{n}\right)^2}{\frac{n_{i.} n_{.j}}{n}}$$
+
+Cramér's V measures the association between two categorical variables, ranging from 0 (no association) to 1 (perfect association).
+
+It is derived from the chi-squared statistic ($\chi^2$), which measures how far away the observed frequencies in a contingency table differ from the expected frequencies under the assumption of no association, it is adjusted for the total number of observations ($n$) and the degrees of freedom ($\text{min}(r-1, c-1)$) to account for table size and structure. The square root scales is due to the nature of the chi-squared statistic measure is squared.
+
+The values of interpretation variate greatly on the context of the data but as a rule of thumb (CHATGPT) we have:
+
+-   $0\leq V \leq 0.1$: Weak association.
+
+-   $0.1 \le V \le 0.3$: Moderate association.
+
+-   $0.3 \le V \le 1$: Strong association.
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
 # Install and load necessary packages
 library(reshape2)
 library(ggplot2)
 library(GGally) # This is required for ggpairs
+library(lsr)
 
 # Compute correlation matrix
 numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
 corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
 melted_corr_mat <- melt(corr_mat)
 
-# Plot correlation heatmap
+# Plot correlation heatmap with middle white color for 0
 ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
   geom_tile() +
-  geom_text(aes(label = value), color = "black", size = 4)+
-  scale_fill_gradient(low = "white", high = "red") +
-  theme_minimal()
-
+  geom_text(aes(label = value), color = "black", size = 4) +
+  scale_fill_gradient2(
+    low = "#4A708B",    # Blue for low correlations
+    mid = "white",      # White for 0 correlations
+    high = "#CD5C5C",   # Red for high correlations
+    midpoint = 0,       # Center the color scale at 0
+    limits = c(-1, 1),  # Optional: specify limits for the color scale
+    name = "Correlation"  # Optional: add a legend title
+  ) +
+  theme_minimal() +
+  labs(title = "Correlation Heatmap",
+       x = "Variables",
+       y = "Variables")
 
 # Pairplot using ggpairs
 ggpairs(data_train[, numeric_column_names])
+
+cramersV(data_train$dorm, data_train$banos)
+
+# Initialize a results matrix
+cram_results <- matrix(NA, nrow = length(cat.var), ncol = length(cat.var),
+                  dimnames = list(cat.var, cat.var))
+
+# Loop through variable pairs
+for (i in 1:(length(cat.var))) {
+  for (j in (i):length(cat.var)) {
+    var1 <- cat.var[i]
+    var2 <- cat.var[j]
+    
+    # Calculate Cramér's V
+    cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
+    cram_results[j, i] <- results[i, j]  # Symmetric
+  }
+}
+
+# Convert to a heatmap-friendly format
+print(cram_results)
+
 ```
+
+### Objective vs. Predictors
+
+In this part we will be creating scatterplots of the relation between the continuous predictors and their price.
+
+```{r, warning=FALSE}
+
+num_vars_2 = setdiff(num_vars, c("precio.house.m2", "ref.hip.zona"))
+
+for (i in num_vars_2) {
+  
+  # Calculate R^2
+  fit <- lm(precio.house.m2 ~ data_train[[i]], data = data_train)
+  r_squared <- summary(fit)$r.squared
+  
+  # Create the plot
+  p <- ggplot(data = data_train, aes(x = data_train[[i]], y = precio.house.m2)) +
+    geom_point(color = "darkseagreen4", alpha = 0.6) +  # Scatter plot
+    geom_smooth(method = "lm", se = FALSE, color = "#FFAEB9") +  # Regression line
+    theme_bw() +
+    labs(
+      title = paste0("Variable:", i, " (R² = ", round(r_squared, 3), ")"),
+      x = i,
+      y = "precio.house.m2"
+    )
+  plot(p)
+}
+```
+
+We observe poor correlation between the objective value and the predictor features.
+
 ### Multivariate
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
@@ -233,7 +324,6 @@ ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y =
   theme_minimal()
 ```
 
-
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
 points_sf <- points_sf[order(points_sf$precio.house.m2), ]
@@ -253,23 +343,19 @@ ggplot() +
 
 ### Done with teh help of ChatGPT
 ```
+
 # Forecasting pipeline
 
 ## Preprocess
 
-
 ```{r}
 
-regfit <- regsubsets(precio.house.m2 ~ ., data = data_train,really.big=T)
-
-# Summary of the results
-summary(regfit)
+# regfit <- regsubsets(precio.house.m2 ~ ., data = data_train,really.big=T)
+# 
+# # Summary of the results
+# summary(regfit)
 ```
 
 ## Fit & Predict
 
 ## Score
-
-
-
-
