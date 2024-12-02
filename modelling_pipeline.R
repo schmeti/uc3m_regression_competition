@@ -163,7 +163,9 @@ diagnostic_plots <- function(model) {
 ### Pipeline Components
 
 ## Preprocess  -----------------------------------------------------------------
-preprocess = function(data){
+preprocess = function(data,
+                      predictors){
+  
   # Transformar la variable objetivo
   data$precio.house.m2 <- log(data$precio.house.m2)
   
@@ -186,15 +188,15 @@ fit_linear_model = function(formula, data_train){
 }
 
 # Predict and score   ----------------------------------------------------------
-predict_and_score = function(model,
-                             model_formula,
-                             data_train,
-                             print_bool = T
-                             ) {
+score_model = function(model,
+                       model_formula,
+                       data,
+                       print_bool = T
+                       ){
   
   
   # score via k_fold
-  cv_scores = k_fold_cv_linear_model(model_formula, data_train)
+  cv_scores = k_fold_cv_linear_model(model_formula, data)
   
   # print scores
   if(print_bool){
@@ -239,19 +241,13 @@ plot_res <- function(model, data_test) {
 ### Run Pipeline
 run_pipeline = function(data,
                         model_formular,
+                        predictors,
                         store_model = FALSE,
                         store_model_name = "linear_model",
                         load_model_path = ""){
   
-  # Train,test split
-  split_data <- train_test_split(data = data)
-  data_train <- split_data$data_train
-  data_test <- split_data$data_train
-  cat("Train,Test Split -- DONE\n")
-  
-
-  # preprocess
-  data_processed = preprocess(data = data_train)
+  # preprocess data
+  data_processed = preprocess(data = data, predictors)
   cat("Preprocessing -- DONE\n")
   
   # fit/load model
@@ -272,10 +268,10 @@ run_pipeline = function(data,
   
   
   # predict and score on test data set
-  score = predict_and_score(model = model,
-                            data_train = data_train,
-                            model_formula=model_formular)
-  cat("Score -- DONE\n")
+  score = score_model(model = model,
+                      data = data_processed,
+                      model_formula=model_formular)
+  cat("Scoring -- DONE\n")
   
   # diagnostics plots
   diagnostic_plots(model)
@@ -300,6 +296,38 @@ data <- read_excel("Data/data_train.xlsx")
 run_pipeline(data,
              model_formula = precio.house.m2 ~ . - barrio - distrito,
              store_model = F,
+             predictors = list("distrito", # location
+                               "longitud",
+                               "latitud",
+                               "ref.hip.zona",
+                               "precio.house.m2",
+                               "sup.const", # area
+                               "sup.util",
+                               "dorm", # flat characteristics
+                               "banos",
+                               "inter.exter",
+                               "ascensor",
+                               "estado",
+                               "antig",
+                               "comercial",
+                               "Ruidos_ext", # area charcteristics
+                               "Mal_olor",
+                               "Poca_limp",
+                               "Malas_comunic",
+                               "Pocas_zonas",
+                               "Delincuencia",
+                               "M.30", # Air Quality
+                               "CO",
+                               "NO2",
+                               "Nox",
+                               "O3",
+                               "SO2",
+                               "PM10",
+                               "Pobl.0_14_div_Poblac.Total", # population in district
+                               "PoblJubilada_div_Poblac.Total",
+                               "Inmigrantes.porc",
+                               
+                               )
              #load_model_path = "models/linear_model_2024-11-25.rds"
              )
 
