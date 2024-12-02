@@ -27,16 +27,17 @@ train_test_split <- function(data){
 ## K-Fold for Cross-Validation -----------------------------------------------
 k_fold <- function(data) {
   
-  
   # Identify numerical and categorical variables
   num_id <- sapply(data, is.numeric)
   num_vars <- names(data)[num_id]
   cat_vars <- names(data)[!num_id]
   
-  
   # Create a k-fold partition with balanced cat_vars and which
   # tries to minimize similar values in "precio.house.m2"
   folded_data <- fold(data, k = 2, cat_col = cat_vars, num_col = "precio.house.m2")
+  
+  ### OR log.precio.house.m2
+  
   # It adds a new variable, .folds, which assigns a value 1 to k to each
   # instance, dividing them by folds
   
@@ -196,7 +197,7 @@ fit_ps_model = function(data_train){
   # Exclude the response variable
   predictors <- setdiff(num_vars, "y")  
   
-  # Create the formula with p-splines for numerical vars. and striaght categorical vars.
+  # Create the formula with p-splines for numerical vars. and straight categorical vars.
   gam_formula <- as.formula(
     paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
   )
