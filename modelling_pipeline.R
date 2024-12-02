@@ -185,6 +185,27 @@ fit_linear_model = function(formula, data_train){
   return(model)
 }
 
+# Fit P-Splines + categorical (GAM) Model --------------------------------------
+fit_ps_model = function(data_train){
+  # Generate the formula automatically
+  num_id <- sapply(data_train, is.numeric)
+  num_vars <- names(data_train)[num_id]
+  cat_vars <- names(data_train)[!num_id]
+  # Exclude the response variable
+  predictors <- setdiff(num_vars, "y")  
+  
+  # Create the formula with p-splines for numerical vars. and striaght categorical vars.
+  gam_formula <- as.formula(
+    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+  )
+  # Fit the GAM 
+  gam_model <- gam(gam_formula, data = data_train)
+  
+  # Return the fitted model
+  return(gam_model)
+}
+
+
 # Predict and score   ----------------------------------------------------------
 predict_and_score = function(model,
                              model_formula,

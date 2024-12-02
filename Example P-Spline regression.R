@@ -48,6 +48,19 @@ model <- gam(y ~ s(x1, bs = "ps", k = 40, m = 3) + s(x2, bs = "ps", k = 40, m = 
 summary(model)
 plot(model)
 
+### FOR automatic pipeline
 
+# Generar la fórmula automáticamente
+num_id <- sapply(data, is.numeric)
+num_vars <- names(data)[num_id]
+cat_vars <- names(data)[!num_id]
+predictors <- setdiff(num_vars, "y")  # Exclude the response variable
 
+gam_formula <- as.formula(
+  paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+)
+
+# Ajustar el modelo GAM
+gam_model <- gam(gam_formula, data = data)
+summary(gam_model)
 
