@@ -29,7 +29,7 @@ library(GGally)
 # Exploratory Analysis
 
 | **Category** | **Variable**                  | **Description**                                                             |
-|-------------------|-------------------|-----------------------------------|
+|---------------|----------------|-----------------------------------------|
 | Continuous   | precio.house.m2               | Property sale price in euros per square meter                               |
 |              | antig                         | Age of the property (years)                                                 |
 |              | Ruidos_ext                    | External noise (%)                                                          |
@@ -79,7 +79,8 @@ data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ")] 
 
 cat.var = c("dorm", "banos", "tipo.casa", "inter.exter", "ascensor", "comercial",
             "casco.historico", "M.30")
-data_train[, cat.var] = lapply(data_train[, cat.var], as.factor)
+data_train[, c(cat.var, "barrio", "distrito")] =
+  lapply(data_train[, c(cat.var, "barrio", "distrito")], as.factor)
 
 num_id <- sapply(data_train, is.numeric)
 num_vars <- names(data_train)[num_id]
@@ -146,48 +147,48 @@ plot_hist(data = data_train ,type="categoric", n=3, m=2)
 
 TODO: Conditional histograms for categoricals (barrios)
 
-```{r warning=FALSE,fig.width=12, fig.height=6, out.width='100%'}
-# Compute correlation matrix
-# Convert Categorical Variables to Numeric Using Label Encoding
-data_encoded <- data_train %>%
-  mutate(across(where(is.character), ~ as.numeric(factor(.))))
-
-# Compute the correlation matrix
-correlations <- cor(data_encoded)
-
-# Check if 'precio.house.m2' exists
-if ("precio.house.m2" %in% colnames(correlations)) {
-  # Extract the row corresponding to 'precio.house.m2'
-  price_per_sqm_corr <- correlations["precio.house.m2", ]
-  
-  # Convert to data frame for plotting
-  price_per_sqm_corr_df <- data.frame(
-    Variable = names(price_per_sqm_corr),
-    Correlation = price_per_sqm_corr
-  )
-  
-  # Plot the correlations
-  library(ggplot2)
-  ggplot(price_per_sqm_corr_df, aes(x = reorder(Variable, Correlation), y = Correlation)) +
-    geom_bar(stat = "identity", fill = "steelblue") +
-    coord_flip() + # Flip coordinates for easier readability
-    theme_minimal() +
-    labs(
-      title = "Correlation with price_per_sqm",
-      x = "Variable",
-      y = "Correlation"
-    )
-} else {
-  stop("precio.house.m2 not found in correlation matrix.")
-}
+```{r warning=FALSE,fig.width=12, fig.height=6, out.width='100%', eval=FALSE}
+# # Compute correlation matrix
+# # Convert Categorical Variables to Numeric Using Label Encoding
+# data_encoded <- data_train %>%
+#   mutate(across(where(is.character), ~ as.numeric(factor(.))))
+# 
+# # Compute the correlation matrix
+# correlations <- cor(data_encoded)
+# 
+# # Check if 'precio.house.m2' exists
+# if ("precio.house.m2" %in% colnames(correlations)) {
+#   # Extract the row corresponding to 'precio.house.m2'
+#   price_per_sqm_corr <- correlations["precio.house.m2", ]
+#   
+#   # Convert to data frame for plotting
+#   price_per_sqm_corr_df <- data.frame(
+#     Variable = names(price_per_sqm_corr),
+#     Correlation = price_per_sqm_corr
+#   )
+#   
+#   # Plot the correlations
+#   library(ggplot2)
+#   ggplot(price_per_sqm_corr_df, aes(x = reorder(Variable, Correlation), y = Correlation)) +
+#     geom_bar(stat = "identity", fill = "steelblue") +
+#     coord_flip() + # Flip coordinates for easier readability
+#     theme_minimal() +
+#     labs(
+#       title = "Correlation with price_per_sqm",
+#       x = "Variable",
+#       y = "Correlation"
+#     )
+# } else {
+#   stop("precio.house.m2 not found in correlation matrix.")
+# }
 
 ```
 
-```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
-library(corrplot)
-# Plot
-corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper", 
-         order = "hclust", tl.col = "black", tl.srt = 45)
+```{# {r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+# library(corrplot)
+# # Plot
+# corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper", 
+#          order = "hclust", tl.col = "black", tl.srt = 45)
 
 ```
 
@@ -255,12 +256,30 @@ for (i in 1:(length(cat.var))) {
     
     # Calculate Cramér's V
     cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
-    cram_results[j, i] <- results[i, j]  # Symmetric
+    cram_results[j, i] <- cram_results[i, j]  # Symmetric
   }
 }
 
 # Convert to a heatmap-friendly format
 print(cram_results)
+
+# Melt results for heatmap
+melted_results <- melt(cram_results, na.rm = TRUE)
+
+# Plot heatmap
+ggplot(melted_results, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +  # Add white borders for better contrast
+  geom_text(aes(label = sprintf("%.2f", value)), size = 12, color = "black") +  # Larger text for values
+  scale_fill_gradient(low = "white", high = "#CD5C5C", limits = c(0, 1)) +  # Adjust color scale
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),  # Larger x-axis labels
+    axis.text.y = element_text(size = 20),  # Larger y-axis labels
+    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),  # Larger title
+    legend.title = element_text(size = 18),  # Larger legend title
+    legend.text = element_text(size = 16)  # Larger legend text
+  ) +
+  labs(title = "Cramér's V Heatmap", fill = "Cramér's V", x = "", y = "")
 
 ```
 
@@ -294,6 +313,74 @@ for (i in num_vars_2) {
 
 We observe poor correlation between the objective value and the predictor features.
 
+### Categorical Values Selection
+
+Let's consider the relations that exist between the categorical values and the price of the flats
+
+```{r}
+library(knitr)
+library(kableExtra)
+
+summary(data_train[cat.var])
+
+# Define a function to calculate and display contingency tables with proportions
+explore_categorical_interactions <- function(data, cat_vars) {
+  for (i in 1:(length(cat_vars) - 1)) {
+    for (j in (i + 1):length(cat_vars)) {
+      var1 <- cat_vars[i]
+      var2 <- cat_vars[j]
+      
+      # Create contingency table (frequencies)
+      freq_table <- table(data[[var1]], data[[var2]])
+      
+      # Create proportion table
+      prop_table <- 100*prop.table(freq_table) %>% round(4)
+      
+      # Combine frequency and proportion into one data frame
+      combined_table <- cbind("Absolute:"= freq_table,
+                              "Relative:" = prop_table)
+
+      # Display using kableExtra
+      cat("\n### Interaction Between", var1, "and", var2, "\n\n")
+      combined_table %>% print()
+    }
+  }
+}
+
+
+explore_categorical_interactions(data_train, cat.var)
+```
+
+Now lets consider the interaction with the price
+
+```{r}
+# Define a function to create boxplots for price grouped by categorical variables
+plot_price_by_categories <- function(data, cat_vars, price_var) {
+  for (var in cat_vars) {
+    # Create the boxplot
+    p <- ggplot(data, aes_string(x = var, y = price_var)) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", price_var, "by", var),
+        x = var,
+        y = price_var
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    
+    # Print the plot
+    print(p)
+  }
+}
+
+# Example usage
+plot_price_by_categories(data_train, cat.var, "precio.house.m2")
+```
+
 ### Multivariate
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
@@ -325,6 +412,7 @@ ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y =
 ```
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+
 points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
 points_sf <- points_sf[order(points_sf$precio.house.m2), ]
 # Download the map of Madrid (use a simple shapefile, for example)
@@ -341,8 +429,120 @@ ggplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
 
 
-### Done with teh help of ChatGPT
+### Done with the help of ChatGPT
 ```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+library(viridis)
+
+ggplot() +
+  # Base map of Madrid
+  geom_sf(data = madrid_map, fill = "lightgray", color = "white") +
+  
+  # Points representing districts
+  geom_sf(data = points_sf, aes(color = distrito), size = 3, alpha = 0.8) + 
+  
+  # Title and axis labels
+  labs(
+    title = "Spatial Distribution of Madrid Districts",
+    x = "Longitude",
+    y = "Latitude",
+    color = "District"
+  ) +
+  
+  # Improved theme
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 30, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 22, hjust = 0.5),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.x = element_text(size = 16, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 16),
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 16),
+    panel.grid.major = element_line(color = "gray80", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  
+  # Viridis discrete palette for more colors
+  scale_color_viridis_d(option = "turbo")  # "turbo" offers vibrant colors
+
+
+```
+
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+library(dplyr)
+
+# Add `distrito2` to `data_train` based on the described grouping
+data_train <- data_train %>%
+  mutate(
+    distrito2 = case_when(
+      # North Districts
+      distrito %in% c("chamartin", "tetuan", "fuencarral",
+                      "hortaleza", "barajas") ~ "North",
+      
+      # Central Zone
+      distrito %in% c("centro", "chamberi", "moncloa", "salamanca",
+                      "retiro", "arganzuela", "latina") ~ "Central",
+      
+      # South Districts
+      distrito %in% c("carabanchel", "villaverde", "usera",
+                      "puente_vallecas", "vicalvaro", "vallecas") ~ "South",
+      
+      # East Districts
+      distrito %in% c("puente_de_vallecas", "moratalaz",
+                      "san_blas", "ciudad_lineal") ~ "East",
+      
+      # Outliers or other districts
+      TRUE ~ "Other"  # Assign any unlisted districts to "Other"
+    )
+  )
+
+head(data_train)
+
+
+points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
+points_sf <- points_sf[order(points_sf$precio.house.m2), ]
+
+ggplot() +
+  # Base map of Madrid
+  geom_sf(data = madrid_map, fill = "lightgray", color = "white") +
+  
+  # Points representing districts
+  geom_sf(data = points_sf, aes(color = distrito2), size = 3, alpha = 0.8) + 
+  
+  # Title and axis labels
+  labs(
+    title = "Spatial Distribution of Madrid Districts",
+    x = "Longitude",
+    y = "Latitude",
+    color = "District"
+  ) +
+  
+  # Improved theme
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 30, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 22, hjust = 0.5),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.x = element_text(size = 16, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 16),
+    legend.title = element_text(size = 20),
+    legend.text = element_text(size = 16),
+    panel.grid.major = element_line(color = "gray80", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  ) +
+  
+  # Viridis discrete palette for more colors
+  scale_color_viridis_d(option = "turbo")  # "turbo" offers vibrant colors
+
+```
+
+
+
 
 # Forecasting pipeline
 
