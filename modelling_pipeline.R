@@ -5,6 +5,8 @@ if (!require(caret)) install.packages("caret")
 if (!require(groupdata2)) install.packages("groupdata2")
 if (!require(car)) install.packages("car")
 if (!require(dplyr)) install.packages("dplyr")
+if (!require(Metrics)) install.packages("Metrics")
+
 
 library(readxl)
 library(leaps)
@@ -12,6 +14,8 @@ library(caret)
 library(groupdata2)
 library(car)
 library(dplyr)
+library(Metrics)
+
 
 
 ### Helper Functions
@@ -25,7 +29,7 @@ train_test_split <- function(data){
 }
 
 ## K-Fold for Cross-Validation -----------------------------------------------
-k_fold <- function(data) {
+k_fold <- function(data,k) {
   
   # Identify numerical and categorical variables
   num_id <- sapply(data, is.numeric)
@@ -34,8 +38,13 @@ k_fold <- function(data) {
   
   # Create a k-fold partition with balanced cat_vars and which
   # tries to minimize similar values in "precio.house.m2"
-  folded_data <- fold(data, k = 2, cat_col = cat_vars, num_col = "precio.house.m2")
+  print(k)
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,#if (length(cat_vars) > 0) cat_vars else NULL, # if no categoric variables, then null 
+                      num_col = "precio.house.m2")
   
+  print(folded_data)
   ### OR log.precio.house.m2
   
   # It adds a new variable, .folds, which assigns a value 1 to k to each
@@ -47,11 +56,14 @@ k_fold <- function(data) {
 
 
 ## K-fold cross-validation ------------------------------------------------------
-k_fold_cv_linear_model <- function(model_formula, data_train){
-   
-  # Create the K-fold partition
-  folded_data <- k_fold(data_train)$.fold
+k_fold_cv_linear_model <- function(model_formula, 
+                                   data_train,
+                                   k=2){
+  cat("=== running k_fold Cross Validation ===")
   
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+
   # Initialize a vector to store each fold's rsme
   cv_rmse <- numeric(k)
   
@@ -65,8 +77,10 @@ k_fold_cv_linear_model <- function(model_formula, data_train){
     temp_train <- data_train[which(folded_data!=i),]
     temp_test <- data_train[which(folded_data==i),]
     
+    print(temp_train)
+    
     # Fit the model and make predictions
-    temp_model <- fit_model(model_formula, temp_train)
+    temp_model <- fit_linear_model(model_formula, temp_train)
     temp_predictions <- predict(temp_model, newdata = temp_test)
     
     ## Calculate error metrics and store them
@@ -75,19 +89,62 @@ k_fold_cv_linear_model <- function(model_formula, data_train){
     cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$precio.house.m2)^2))
     
     # rsq adj
+    n_train = nrow(temp_train)
+    num_predictors = ncol(temp_train)-1
+    print(num_predictors)
+    
     
     SSE = sum((temp_test$precio.house.m2 - temp_predictions )^2)
     SSR = sum((mean(temp_test$precio.house.m2) - temp_predictions)^2)
     SST = SSE + SSE
 
     cv_rsq_adj[i] = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
-    
   }
   
   # Return the vector with rmse for each k-fold
   return(list(cv_rmse=cv_rmse,
               cv_rsq_adj=cv_rsq_adj))
 }
+
+## Leave one out - cross-validation ------------------------------------------------------
+loo_cv_linear_model <- function(model_formula, 
+                                   data_train){
+  cat("=== running Leave one Out Cross Validation ===")
+  n <- nrow(data_train)
+  cv_rmse <- numeric(n)
+  cv_rsq_adj <- numeric(n)
+  
+
+  for (i in 1:n){
+    temp_train <- data_train[-i, ]
+    temp_test <- data_train[i, , drop = FALSE]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_linear_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # rmse
+    cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$precio.house.m2)^2))
+    
+    # rsq adj
+    n_train = nrow(temp_train)
+    num_predictors = ncol(temp_train)-1
+    
+    SSE = sum((temp_test$precio.house.m2 - temp_predictions )^2)
+    SSR = sum((mean(temp_test$precio.house.m2) - temp_predictions)^2)
+    SST = SSE + SSE
+    
+    cv_rsq_adj[i] = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse=cv_rmse,
+              cv_rsq_adj=cv_rsq_adj))
+}
+
+
 
 
 
@@ -174,28 +231,30 @@ diagnostic_plots <- function(model) {
 preprocess = function(data,
                       predictors){
   
-  # Transformar la variable objetivo
+  # Log transform of price per sqm
   data$precio.house.m2 <- log(data$precio.house.m2)
   
-  # Definir columnas categóricas
+  # Turn to categorical columns
   factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
-  
-  # Convertir a factores
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
   
   # Eliminar columnas no deseadas
-  data <- data %>% select(-c(cod_barrio, cod_distrito, train_indices))
+  data <- subset(data, select=predictors)
+  
   return(data)
 }
 
 # Fit Model   ------------------------------------------------------------------
+
+## linear model
+
 fit_linear_model = function(formula, data_train){
   model = lm(formula,data = data_train)
   return(model)
 }
 
-# Fit P-Splines + categorical (GAM) Model --------------------------------------
+## Fit P-Splines + categorical (GAM) Model
 fit_ps_model = function(data_train){
   # Generate the formula automatically
   num_id <- sapply(data_train, is.numeric)
@@ -216,7 +275,7 @@ fit_ps_model = function(data_train){
 }
 
 
-# Predict and score   ----------------------------------------------------------
+# Score   ----------------------------------------------------------
 score_model = function(model,
                        model_formula,
                        data,
@@ -225,7 +284,8 @@ score_model = function(model,
   
   
   # score via k_fold
-  cv_scores = k_fold_cv_linear_model(model_formula, data)
+  #cv_scores = k_fold_cv_linear_model(model_formula, data)
+  cv_scores = loo_cv_linear_model(model_formula, data)
   
   # print scores
   if(print_bool){
@@ -289,6 +349,8 @@ run_pipeline = function(data,
     model = fit_linear_model(formula = model_formular, data_train = data_processed)
   }
   cat("Load/Fit Model -- DONE\n")
+  print(summary(model))
+  
   
   
   # check multicolinearity
@@ -322,41 +384,44 @@ run_pipeline = function(data,
 
 # execute
 data <- read_excel("Data/data_train.xlsx")
+
+
+predictors_selected = c("longitud",
+                        "latitud",
+                        #"ref.hip.zona",
+                        "precio.house.m2",
+                        "sup.const", # area
+                        #"sup.util",
+                        "dorm", # flat characteristics
+                        "banos",
+                        "inter.exter",
+                        "ascensor",
+                        "estado"
+                        #"antig",
+                        #"comercial",
+                        #"Ruidos_ext", # area charcteristics
+                        #"Mal_olor",
+                        #"Poca_limp",
+                        #"Malas_comunic",
+                        #"Pocas_zonas",
+                        #"Delincuencia",
+                        #"M.30", # Air Quality
+                        #"CO",
+                        #"NO2",
+                        #"Nox",
+                        #"O3",
+                        #"SO2",
+                        #"PM10",
+                        #"Pobl.0_14_div_Poblac.Total", # population in district
+                        #"PoblJubilada_div_Poblac.Total"
+                        #"Inmigrantes.porc"
+)
+
+
 run_pipeline(data,
-             model_formula = precio.house.m2 ~ . - barrio - distrito,
+             model_formula = precio.house.m2 ~ .,
              store_model = F,
-             predictors = list("distrito", # location
-                               "longitud",
-                               "latitud",
-                               "ref.hip.zona",
-                               "precio.house.m2",
-                               "sup.const", # area
-                               "sup.util",
-                               "dorm", # flat characteristics
-                               "banos",
-                               "inter.exter",
-                               "ascensor",
-                               "estado",
-                               "antig",
-                               "comercial",
-                               "Ruidos_ext", # area charcteristics
-                               "Mal_olor",
-                               "Poca_limp",
-                               "Malas_comunic",
-                               "Pocas_zonas",
-                               "Delincuencia",
-                               "M.30", # Air Quality
-                               "CO",
-                               "NO2",
-                               "Nox",
-                               "O3",
-                               "SO2",
-                               "PM10",
-                               "Pobl.0_14_div_Poblac.Total", # population in district
-                               "PoblJubilada_div_Poblac.Total",
-                               "Inmigrantes.porc",
-                               
-                               )
+             predictors = predictors_selected
              #load_model_path = "models/linear_model_2024-11-25.rds"
              )
 
