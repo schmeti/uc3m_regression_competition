@@ -92,12 +92,19 @@ k_fold_cv_linear_model <- function(model_formula, data_train){
 
 
 ## Check Multicoliniearity -----------------------------------------------------
-check_multicollinearity <- function(model) {
+check_multicollinearity <- function(model, data_train) {
+  
+  # Identify numerical and categorical variables
+  num_id <- sapply(data, is.numeric)
+  num_vars <- names(data)[num_id]
+  cat_vars <- names(data)[!num_id]
+  
   # Model Matrix
-  X <- model.matrix(model)
+  X <- data_train[,num_vars]
+  R <- cor(X)
   
   # Calculate condition number using kappa
-  condition_number <- kappa(X, exact = TRUE)
+  condition_number <- kappa(R, exact = TRUE)
   
   # Calculating VIF values using the car package
   vif_values <- tryCatch({

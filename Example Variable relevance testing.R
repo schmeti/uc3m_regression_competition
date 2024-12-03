@@ -1,3 +1,9 @@
+
+library(RcmdrMisc)
+library(rpart)
+library(MASS)
+library(ggplot2)
+
 ### Categorical predictor
 ## Prior assumptions
 # Normality 
@@ -63,6 +69,69 @@ Relevance_test = function(data, response, group){
   }
   return(NULL)
 }
+
+################################################################################
+
+# Function to evaluate assumptions of normality and homoscedasticity
+evaluate_assumptions <- function(data, response, group) {
+  # Shapiro-Wilk test for normality
+  shapiro_p <- shapiro.test(data[[response]])$p.value 
+  
+  # Anderson-Darling test for normality
+  library(nortest)
+  ad_p <- ad.test(data[[response]])$p.value 
+  
+  # Levene's test for homoscedasticity
+  library(car)
+  levene_p <- leveneTest(data[[response]] ~ data[[group]])$p.value 
+  
+  return(list(
+    shapiro_normality = shapiro_p > 0.05, 
+    ad_normality = ad_p > 0.05, 
+    homoscedasticity = levene_p > 0.05
+  ))
+}
+
+# Main function
+Relevance_test <- function(data, response, group) {
+  if (is.factor(data$group)) {
+    # Categorical predictor
+    if (nlevels(data[[group]]) == 2) { # Binary predictor
+      assumptions <- evaluate_assumptions(data, response, group)
+      if (assumptions$shapiro_normality & assumptions$homoscedasticity) {
+        print("T-test for groups with satisfied assumptions:")
+        print(t.test(data[[response]] ~ data[[group]])) # Parametric
+      } else {
+        print("Mann-Whitney U test for groups without satisfied assumptions:")
+        print(wilcox.test(data[[response]] ~ data[[group]])) # Non-parametric
+      }
+    } else { # Categorical predictor with more than 2 levels
+      assumptions <- evaluate_assumptions(data, response, group)
+      if (assumptions$shapiro_normality & assumptions$homoscedasticity) {
+        print("ANOVA for groups with satisfied assumptions:")
+        anova_model <- aov(data[[response]] ~ data[[group]])
+        print(summary(anova_model)) # Parametric
+      } else {
+        print("Kruskal-Wallis test for groups without satisfied assumptions:")
+        print(kruskal.test(data[[response]] ~ data[[group]])) # Non-parametric
+      }
+    }
+  } else { # Numerical predictor
+    print("Correlation analysis:")
+    print("Pearson correlation (normality and linearity):")
+    print(cor.test(data[[response]], data[[group]], method = "pearson")) # Parametric
+    print("Spearman correlation (non-parametric):")
+    print(cor.test(data[[response]], data[[group]], method = "spearman")) # Non-parametric
+  }
+}
+
+# Example usage
+library(readxl)
+data <- read_excel("Data/data_train.xlsx")
+data$log.precio.house.m2 <- log(data$precio.house.m2)
+data$precio.house.m2 <- NULL
+
+Relevance_test(data, "log.precio.house.m2", "grupo_categ")
 
 
 
