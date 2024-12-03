@@ -94,7 +94,7 @@ evaluate_assumptions <- function(data, response, group) {
 
 # Main function
 Relevance_test <- function(data, response, group) {
-  if (is.factor(data$group)) {
+  if (is.factor(data[[group]])) {
     # Categorical predictor
     if (nlevels(data[[group]]) == 2) { # Binary predictor
       assumptions <- evaluate_assumptions(data, response, group)

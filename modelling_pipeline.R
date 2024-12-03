@@ -100,7 +100,7 @@ check_multicollinearity <- function(model, data_train) {
   cat_vars <- names(data)[!num_id]
   
   # Model Matrix
-  X <- data_train[,num_vars]
+  X <- data[,num_vars]
   R <- cor(X)
   
   # Calculate condition number using kappa
@@ -360,3 +360,11 @@ run_pipeline(data,
              #load_model_path = "models/linear_model_2024-11-25.rds"
              )
 
+
+
+
+
+
+############### OJO
+#The numerical variables selected via teh BIC are
+# num_vars <- c("ref.hip.zona", "antig", "Poca_limp", "PM10", "Pobl.0_14_div_Poblac.Total" ,   "PoblJubilada_div_Poblac.Total", "Inmigrantes.porc", "Pocas_zonas")
