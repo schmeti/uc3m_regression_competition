@@ -10,6 +10,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Map of Madrid with points and color indicating prizes
 
+Hola
+
+
+
+
+
+
 ```{r}
 library(readxl)
 data_train <- read_excel("Data/data_train.xlsx")

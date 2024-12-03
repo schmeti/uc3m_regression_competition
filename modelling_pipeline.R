@@ -27,16 +27,17 @@ train_test_split <- function(data){
 ## K-Fold for Cross-Validation -----------------------------------------------
 k_fold <- function(data) {
   
-  
   # Identify numerical and categorical variables
   num_id <- sapply(data, is.numeric)
   num_vars <- names(data)[num_id]
   cat_vars <- names(data)[!num_id]
   
-  
   # Create a k-fold partition with balanced cat_vars and which
   # tries to minimize similar values in "precio.house.m2"
   folded_data <- fold(data, k = 2, cat_col = cat_vars, num_col = "precio.house.m2")
+  
+  ### OR log.precio.house.m2
+  
   # It adds a new variable, .folds, which assigns a value 1 to k to each
   # instance, dividing them by folds
   
@@ -163,7 +164,9 @@ diagnostic_plots <- function(model) {
 ### Pipeline Components
 
 ## Preprocess  -----------------------------------------------------------------
-preprocess = function(data){
+preprocess = function(data,
+                      predictors){
+  
   # Transformar la variable objetivo
   data$precio.house.m2 <- log(data$precio.house.m2)
   
@@ -185,16 +188,37 @@ fit_linear_model = function(formula, data_train){
   return(model)
 }
 
+# Fit P-Splines + categorical (GAM) Model --------------------------------------
+fit_ps_model = function(data_train){
+  # Generate the formula automatically
+  num_id <- sapply(data_train, is.numeric)
+  num_vars <- names(data_train)[num_id]
+  cat_vars <- names(data_train)[!num_id]
+  # Exclude the response variable
+  predictors <- setdiff(num_vars, "y")  
+  
+  # Create the formula with p-splines for numerical vars. and straight categorical vars.
+  gam_formula <- as.formula(
+    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+  )
+  # Fit the GAM 
+  gam_model <- gam(gam_formula, data = data_train)
+  
+  # Return the fitted model
+  return(gam_model)
+}
+
+
 # Predict and score   ----------------------------------------------------------
-predict_and_score = function(model,
-                             model_formula,
-                             data_train,
-                             print_bool = T
-                             ) {
+score_model = function(model,
+                       model_formula,
+                       data,
+                       print_bool = T
+                       ){
   
   
   # score via k_fold
-  cv_scores = k_fold_cv_linear_model(model_formula, data_train)
+  cv_scores = k_fold_cv_linear_model(model_formula, data)
   
   # print scores
   if(print_bool){
@@ -239,19 +263,13 @@ plot_res <- function(model, data_test) {
 ### Run Pipeline
 run_pipeline = function(data,
                         model_formular,
+                        predictors,
                         store_model = FALSE,
                         store_model_name = "linear_model",
                         load_model_path = ""){
   
-  # Train,test split
-  split_data <- train_test_split(data = data)
-  data_train <- split_data$data_train
-  data_test <- split_data$data_train
-  cat("Train,Test Split -- DONE\n")
-  
-
-  # preprocess
-  data_processed = preprocess(data = data_train)
+  # preprocess data
+  data_processed = preprocess(data = data, predictors)
   cat("Preprocessing -- DONE\n")
   
   # fit/load model
@@ -272,10 +290,10 @@ run_pipeline = function(data,
   
   
   # predict and score on test data set
-  score = predict_and_score(model = model,
-                            data_train = data_train,
-                            model_formula=model_formular)
-  cat("Score -- DONE\n")
+  score = score_model(model = model,
+                      data = data_processed,
+                      model_formula=model_formular)
+  cat("Scoring -- DONE\n")
   
   # diagnostics plots
   diagnostic_plots(model)
@@ -300,6 +318,38 @@ data <- read_excel("Data/data_train.xlsx")
 run_pipeline(data,
              model_formula = precio.house.m2 ~ . - barrio - distrito,
              store_model = F,
+             predictors = list("distrito", # location
+                               "longitud",
+                               "latitud",
+                               "ref.hip.zona",
+                               "precio.house.m2",
+                               "sup.const", # area
+                               "sup.util",
+                               "dorm", # flat characteristics
+                               "banos",
+                               "inter.exter",
+                               "ascensor",
+                               "estado",
+                               "antig",
+                               "comercial",
+                               "Ruidos_ext", # area charcteristics
+                               "Mal_olor",
+                               "Poca_limp",
+                               "Malas_comunic",
+                               "Pocas_zonas",
+                               "Delincuencia",
+                               "M.30", # Air Quality
+                               "CO",
+                               "NO2",
+                               "Nox",
+                               "O3",
+                               "SO2",
+                               "PM10",
+                               "Pobl.0_14_div_Poblac.Total", # population in district
+                               "PoblJubilada_div_Poblac.Total",
+                               "Inmigrantes.porc",
+                               
+                               )
              #load_model_path = "models/linear_model_2024-11-25.rds"
              )
 
