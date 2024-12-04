@@ -442,6 +442,7 @@ ggplot() +
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
 library(viridis)
 
+
 ggplot() +
   # Base map of Madrid
   geom_sf(data = madrid_map, fill = "lightgray", color = "white") +

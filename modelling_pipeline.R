@@ -116,14 +116,13 @@ loo_cv_linear_model <- function(model_formula,
   
 
   for (i in 1:n){
+    # split
     temp_train <- data_train[-i, ]
     temp_test <- data_train[i, , drop = FALSE]
     
     # Fit the model and make predictions
     temp_model <- fit_linear_model(model_formula, temp_train)
     temp_predictions <- predict(temp_model, newdata = temp_test)
-    
-    ## Calculate error metrics and store them
     
     # rmse
     cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$precio.house.m2)^2))
@@ -234,7 +233,30 @@ preprocess = function(data,
   # Log transform of price per sqm
   data$precio.house.m2 <- log(data$precio.house.m2)
   
-  # Turn to categorical columns
+  # group categories via manual evaluation
+  # distric
+  data$distrito[data$distrito %in% c("carabanchel", "puente_vallecas", "usera","vallecas","villaverde")] = "south"
+  data$distrito[data$distrito %in% c("arganzuela", "centro", "chamberi","retiro","salamanca")] = "centro"
+  data$distrito[data$distrito %in% c("barajas", "chamartin", "fuencarral", "hortaleza", "tetuan")] = "north"
+  data$distrito[data$distrito %in% c("moncloa","latina")] = "west"
+  data$distrito[data$distrito %in% c("vallecas","moratalaz","vicalvaro","san_blas","ciudad_lineal")] = "east"
+
+  # dorm
+  data$dorm[data$dorm %in% c("3","4")] = "3&4"
+  data$dorm[data$dorm %in% c("5","6","7","8","9","10")] = "5+"
+
+  #banos
+  data$banos[data$banos %in% c("3","4","5","6","7","8")] = "3+"
+
+  # type
+  data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
+
+  # state
+  data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "excelente+nuevo-semin+reformado"
+  data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "buen_estado+segunda_mano"
+  data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "excelente+nuevo-semin+reformado"
+
+  # Turn categorical columns to factors
   factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
