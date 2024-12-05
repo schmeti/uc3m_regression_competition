@@ -96,9 +96,9 @@ data$tipo.casa[data$tipo.casa %in% c("chalet","duplex")] = "chalet+duplex"
 data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
 
 # state
-data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "excelente+nuevo-semin+reformado"
-data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "buen_estado+segunda_mano"
-data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "a_reformar+reg-mal"
+data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
+data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
+data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "malo"
 
 # normalize latitude and longitude
 data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
@@ -192,6 +192,44 @@ summary(interact_lm_BIC)
 # Save the model to a file and load it
 save(interact_lm_BIC, file = "interact_lm_BIC.RData")
 load("interact_lm_BIC.RData")
+interact_predictors <- labels(terms(interact_lm_BIC))
+
+### Full lm model BIC vars
+predictors <- labels(terms(lm_BIC))
+num_id <- sapply(data_train[predictors], is.numeric)
+num_vars <- names(data_train[predictors])[num_id]
+cat_vars <- names(data_train[predictors])[!num_id]
+interact_predictors <- labels(terms(interact_lm_BIC))
+
+full_lm_formula <- as.formula(
+  paste("y ~", paste(c(num_vars, cat_vars, interact_predictors), collapse = " + "))
+)
+full_lm_model = lm(full_lm_formula,data = data_train)
+summary(full_lm_model)
+# BIC
+full_lm_BIC <- stepAIC(full_lm_model, direction = 'both', k = log(n))
+summary(full_lm_BIC)
+# AIC
+full_lm_AIC <- stepAIC(full_lm_model, direction = 'both', k = 2)
+summary(full_lm_AIC)
 
 
+full_gam_formula <- as.formula(
+  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars, interact_predictors), collapse = " + "))
+)
+# Fit the GAM 
+full_gam_model <- gam(full_gam_formula, data = data_train)
+summary(full_gam_model)
+
+# After - BIC GAM formula
+predictors <- labels(terms(full_lm_BIC))
+std_num_predictors <- predictors[1:5]
+std_cat_predictors <- predictors[6:10]
+interact_predictors <- predictors[11:15]
+full_gam_formula_BIC <- as.formula(
+  paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
+)
+# Fit the GAM 
+full_gam_model_BIC <- gam(full_gam_formula_BIC, data = data_train)
+summary(full_gam_model_BIC)
 
