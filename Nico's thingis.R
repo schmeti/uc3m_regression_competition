@@ -192,6 +192,45 @@ summary(interact_lm_BIC)
 # Save the model to a file and load it
 save(interact_lm_BIC, file = "interact_lm_BIC.RData")
 load("interact_lm_BIC.RData")
+interact_predictors <- labels(terms(interact_lm_BIC))
+
+### Full lm model BIC vars
+predictors <- labels(terms(lm_BIC))
+num_id <- sapply(data_train[predictors], is.numeric)
+num_vars <- names(data_train[predictors])[num_id]
+cat_vars <- names(data_train[predictors])[!num_id]
+interact_predictors <- labels(terms(interact_lm_BIC))
+
+full_lm_formula <- as.formula(
+  paste("y ~", paste(c(num_vars, cat_vars, interact_predictors), collapse = " + "))
+)
+full_lm_model = lm(full_lm_formula,data = data_train)
+summary(full_lm_model)
+# BIC
+full_lm_BIC <- stepAIC(full_lm_model, direction = 'both', k = log(n))
+summary(full_lm_BIC)
+# AIC
+full_lm_AIC <- stepAIC(full_lm_model, direction = 'both', k = 2)
+summary(full_lm_AIC)
 
 
+full_gam_formula <- as.formula(
+  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars, interact_predictors), collapse = " + "))
+)
+# Fit the GAM 
+full_gam_model <- gam(full_gam_formula, data = data_train)
+summary(full_gam_model)
+
+# if (!requireNamespace("gam")) install.packages("gam")
+# library(gam)
+# aux_gam_formula <- as.formula(
+#   paste("~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars, interact_predictors), collapse = " + "))
+# )
+# full_gam_model_AIC <- step.gam(full_gam_model, scope = list(
+#   lower = ~ 1,        # Minimum model
+#   upper = aux_gam_formula  # Full model
+# ), direction = "both")
+# 
+# full_gam_model_AIC <- stepAIC(full_gam_model, direction = 'both', k = 2)
+# summary(full_gam_model_AIC)
 
