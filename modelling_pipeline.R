@@ -271,7 +271,7 @@ preprocess = function(data,
   # state
   data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
   data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
-  data$estado[data$estado %in% c("a_reformar","reg-mal")] = "malo"
+  data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "malo"
 
   # normalize latitude and longitude
   data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)

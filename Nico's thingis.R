@@ -96,9 +96,9 @@ data$tipo.casa[data$tipo.casa %in% c("chalet","duplex")] = "chalet+duplex"
 data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
 
 # state
-data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "excelente+nuevo-semin+reformado"
-data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "buen_estado+segunda_mano"
-data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "a_reformar+reg-mal"
+data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
+data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
+data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "malo"
 
 # normalize latitude and longitude
 data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
@@ -223,9 +223,9 @@ summary(full_gam_model)
 
 # After - BIC GAM formula
 predictors <- labels(terms(full_lm_BIC))
-std_num_predictors <- predictors[1:10]
-std_cat_predictors <- predictors[11:15]
-interact_predictors <- predictors[15:20]
+std_num_predictors <- predictors[1:5]
+std_cat_predictors <- predictors[6:10]
+interact_predictors <- predictors[11:15]
 full_gam_formula_BIC <- as.formula(
   paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
 )
