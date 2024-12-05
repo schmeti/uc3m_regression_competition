@@ -397,7 +397,7 @@ run_pipeline = function(data,
   
   
   # check multicolinearity
-  multicollinearity <- check_multicollinearity(model)
+  multicollinearity <- check_multicollinearity(model, data_processed)
   cat("Check Multicolinearity -- DONE\n")
   
   

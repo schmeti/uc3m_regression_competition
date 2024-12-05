@@ -1,0 +1,77 @@
+---
+title: "Untitled"
+author: "Ángel Pellitero García"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Documentation
+
+Since the training data consists of 36 variables, which will
+
+### Categorical Review
+
+Lets test if the new categorical agrupations present significative differences between them.
+
+```{r, echo=FALSE}
+source("modelling_pipeline.R")
+```
+
+```{r}
+data_processed = preprocess(data)
+
+# Function to create boxplots, perform Kruskal-Wallis test, and run post-hoc tests
+plot_price_by_categories <- function(data, cat_vars, price_var) {
+  for (var in cat_vars) {
+    # Create the boxplot
+    p <- ggplot(data, aes_string(x = var, y = price_var)) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", price_var, "by", var),
+        x = var,
+        y = price_var
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    
+    # Print the boxplot
+    print(p)
+    
+    # Perform Kruskal-Wallis test
+    test_formula <- as.formula(paste(price_var, "~", var))
+    kruskal_result <- kruskal.test(test_formula, data = data)
+    
+    # Print Kruskal-Wallis results
+    print(kruskal_result)
+    
+    # Perform post-hoc test if Kruskal-Wallis is significant
+    if (kruskal_result$p.value <= 0.05) {
+      cat("\nPost-hoc analysis using pairwise Wilcoxon tests:\n")
+      print(test_formula)
+      
+      # Perform pairwise Wilcoxon test
+      post_hoc_result <- pairwise.wilcox.test(
+        x = data[[price_var]],
+        g = data[[var]],
+        p.adjust.method = "bonferroni"  # Adjust for multiple comparisons
+      )
+      
+      # Print post-hoc results
+      print(post_hoc_result)
+    }
+  }
+}
+
+# Example usage
+cat.var <- c("estado", "tipo.casa")  # Categorical variables
+plot_price_by_categories(data_processed, cat.var, "precio.house.m2")
+
+```
