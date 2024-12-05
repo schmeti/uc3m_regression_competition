@@ -6,12 +6,66 @@ library(car)
 library(dplyr)
 library(mgcv)
 library(MASS)
+library(geosphere)
+
+## Check Multicoliniearity -----------------------------------------------------
+check_multicollinearity <- function(model, data) {
+  
+  # Identify numerical and categorical variables
+  predictors <- labels(terms(model)) # Variables used in the model
+  data <- data[predictors]
+  num_id <- sapply(data, is.numeric)
+  num_vars <- names(data)[num_id]
+  cat_vars <- names(data)[!num_id]
+  
+  # Model Matrix
+  X <- data[,num_vars]
+  R <- cor(X)
+  
+  # Calculate condition number using kappa
+  condition_number <- kappa(R, exact = TRUE)
+  
+  # Calculating VIF values using the car package
+  vif_values <- tryCatch({
+    vif(model)
+  }, error = function(e) {
+    warning("Could not calculate VIF due to collinearity issues.")
+    return(NA)
+  })
+  
+  # Generate warnings if there are significant problems
+  if (condition_number > 30) {
+    warning("High condition number detected, indicating potential multicollinearity issues.")
+  }
+  if (any(vif_values > 10, na.rm = TRUE)) {
+    warning("VIF values greater than 10 detected, indicating potential multicollinearity issues.")
+  }
+  
+  # Give out diagnostics 
+  cat("=== Multicollinearity Diagnostics ===\n")
+  if (is.na(condition_number)) {
+    cat("Serious issues detected in the condition number.\n")
+  } else {
+    cat("Condition Number:", round(condition_number, 2), "\n")
+  }
+  
+  cat("VIF Values:\n")
+  if (all(is.na(vif_values))) {
+    cat("VIF values could not be calculated due to collinearity.\n")
+  } else {
+    print(vif_values)
+  }
+  
+  # Return results
+  return(list(
+    condition_number = condition_number,
+    vif_values = vif_values
+  ))
+}
 
 data <- read_excel("Data/data_train.xlsx")
 
 # radius
-# Load required library
-library(geosphere)
 # Central point (Puerta del Sol)
 center <- c(-3.7038, 40.4168)
 
@@ -83,11 +137,14 @@ lm_formula <- as.formula(
 )
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
+check_multicollinearity(lm_model, data = data_train)
 
 ### Step BIC
 n <- 736
 lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
 summary(lm_BIC)
+check_multicollinearity(lm_BIC, data = data_train)
+
 ### Step AIC
 lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
 summary(lm_AIC)
