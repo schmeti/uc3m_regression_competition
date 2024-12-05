@@ -148,9 +148,11 @@ loo_cv_linear_model <- function(model_formula,
 
 
 ## Check Multicoliniearity -----------------------------------------------------
-check_multicollinearity <- function(model, data_train) {
+check_multicollinearity <- function(model, data) {
   
   # Identify numerical and categorical variables
+  predictors <- labels(terms(model)) # Variables used in the model
+  data <- data[predictors]
   num_id <- sapply(data, is.numeric)
   num_vars <- names(data)[num_id]
   cat_vars <- names(data)[!num_id]
@@ -233,6 +235,18 @@ preprocess = function(data,
   # Log transform of price per sqm
   data$precio.house.m2 <- log(data$precio.house.m2)
   
+  # radius
+  # Load required library
+  library(geosphere)
+  # Central point (Puerta del Sol)
+  center <- c(-3.7038, 40.4168)
+    
+  # Calculate distances and add a new column
+  data$radius <- distHaversine(
+    matrix(c(data$longitud, data$latitud), ncol = 2),
+    matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
+  ) / 1000  # Convert meters to kilometers
+  
   # group categories via manual evaluation
   # distric
   data$distrito[data$distrito %in% c("carabanchel", "puente_vallecas", "usera","vallecas","villaverde")] = "south"
@@ -242,6 +256,7 @@ preprocess = function(data,
   data$distrito[data$distrito %in% c("vallecas","moratalaz","vicalvaro","san_blas","ciudad_lineal")] = "east"
 
   # dorm
+  data$dorm[data$dorm %in% c("0","1")] = "0&1"
   data$dorm[data$dorm %in% c("3","4")] = "3&4"
   data$dorm[data$dorm %in% c("5","6","7","8","9","10")] = "5+"
 
@@ -249,13 +264,19 @@ preprocess = function(data,
   data$banos[data$banos %in% c("3","4","5","6","7","8")] = "3+"
 
   # type
+  data$tipo.casa[data$tipo.casa %in% c("Otros","piso")] = "piso"
+  data$tipo.casa[data$tipo.casa %in% c("chalet","duplex")] = "chalet+duplex"
   data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
 
   # state
   data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "excelente+nuevo-semin+reformado"
   data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "buen_estado+segunda_mano"
-  data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "excelente+nuevo-semin+reformado"
+  data$estado[data$estado %in% c("a_reformar","reg-mal")] = "a_reformar+reg-mal"
 
+  # normalize latitude and longitude
+  data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
+  data$latitud <- (data$latitud - mean(data$latitud))/sd(data$latitud)
+  
   # Turn categorical columns to factors
   factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
