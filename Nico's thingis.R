@@ -221,16 +221,15 @@ full_gam_formula <- as.formula(
 full_gam_model <- gam(full_gam_formula, data = data_train)
 summary(full_gam_model)
 
-# if (!requireNamespace("gam")) install.packages("gam")
-# library(gam)
-# aux_gam_formula <- as.formula(
-#   paste("~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars, interact_predictors), collapse = " + "))
-# )
-# full_gam_model_AIC <- step.gam(full_gam_model, scope = list(
-#   lower = ~ 1,        # Minimum model
-#   upper = aux_gam_formula  # Full model
-# ), direction = "both")
-# 
-# full_gam_model_AIC <- stepAIC(full_gam_model, direction = 'both', k = 2)
-# summary(full_gam_model_AIC)
+# After - BIC GAM formula
+predictors <- labels(terms(full_lm_BIC))
+std_num_predictors <- predictors[1:10]
+std_cat_predictors <- predictors[11:15]
+interact_predictors <- predictors[15:20]
+full_gam_formula_BIC <- as.formula(
+  paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
+)
+# Fit the GAM 
+full_gam_model_BIC <- gam(full_gam_formula_BIC, data = data_train)
+summary(full_gam_model_BIC)
 

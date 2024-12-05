@@ -260,7 +260,7 @@ preprocess = function(data,
   data$dorm[data$dorm %in% c("3","4")] = "3&4"
   data$dorm[data$dorm %in% c("5","6","7","8","9","10")] = "5+"
 
-  #banos
+  # banos
   data$banos[data$banos %in% c("3","4","5","6","7","8")] = "3+"
 
   # type
@@ -269,9 +269,9 @@ preprocess = function(data,
   data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
 
   # state
-  data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "excelente+nuevo-semin+reformado"
-  data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "buen_estado+segunda_mano"
-  data$estado[data$estado %in% c("a_reformar","reg-mal")] = "a_reformar+reg-mal"
+  data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
+  data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
+  data$estado[data$estado %in% c("a_reformar","reg-mal")] = "malo"
 
   # normalize latitude and longitude
   data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
