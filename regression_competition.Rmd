@@ -479,6 +479,81 @@ ggplot() +
 
 ```
 
+```{r}
+# Assuming you have a list of column names to loop through
+columns_to_plot <- c("CO", "NO2", "Nox","O3","SO2","PM10")  # Replace with actual column names
+
+
+# Standardize the selected columns by their standard deviation
+#data_train[columns_to_plot] <- 
+
+# Now sum the standardized columns
+data_train$sum_pollutants <- rowSums(scale(data_train[columns_to_plot], center = FALSE, scale = apply(data_train[columns_to_plot], 2, sd)), na.rm = TRUE)
+#data_train$sum_pollutants <- rowSums(data[columns_to_plot], na.rm = TRUE)
+
+
+# Standardize the selected columns by their standard deviation
+standardized_data <- scale(data_train[columns_to_plot], center = FALSE, scale = apply(data_train[columns_to_plot], 2, sd))
+
+# Now sum the standardized columns and divide by 'radius'
+data_train$sum_pollutants_by_radius <- rowSums(standardized_data, na.rm = TRUE) / data_train$radius
+
+
+data_train$SO2_by_radius <- data_train$SO2 / data_train$radius
+
+
+columns_to_plot = c(columns_to_plot,"sum_pollutants","SO2_by_radius")
+# Loop through each column name and plot the map
+for (column in columns_to_plot) {
+  points_sf <- st_as_sf(data_train, coords = c("longitud", "latitud"), crs = 4326)
+  points_sf <- points_sf[order(points_sf[[column]]), ]  # Use dynamic column reference
+
+  # Plot the map with points colored by the current column
+  plot = ggplot() +
+    geom_sf(data = madrid_map, fill = "lightgray", color = "white") +  # Plot map
+    geom_sf(data = points_sf, aes(color = !!sym(column)), size = 1) +  # Dynamically use column for color
+    scale_color_gradient(low = "#00C5CD", high = "red") +
+    labs(title = paste("location vs air quality", column),
+         x = "Longitude", y = "Latitude") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+  print(plot)
+}
+```
+
+
+```{r}
+
+library(geosphere)
+# Central point (Puerta del Sol)
+center <- c(-3.7038, 40.4168)
+  
+# Calculate distances and add a new column
+data_train$radius <- distHaversine(
+  matrix(c(data_train$longitud, data_train$latitud), ncol = 2),
+  matrix(rep(center, nrow(data_train)), ncol = 2, byrow = TRUE)
+) / 1000  # Convert meters to kilometers
+
+
+for (i in c("radius")) {
+  
+  # Calculate R^2
+  fit <- lm(precio.house.m2 ~ data_train[[i]], data = data_train)
+  r_squared <- summary(fit)$r.squared
+  
+  # Create the plot
+  p <- ggplot(data = data_train, aes(x = data_train[[i]], y = precio.house.m2)) +
+    geom_point(color = "darkseagreen4", alpha = 0.6) +  # Scatter plot
+    geom_smooth(method = "lm", se = FALSE, color = "#FFAEB9") +  # Regression line
+    theme_bw() +
+    labs(
+      title = paste0("Variable:", i, " (R² = ", round(r_squared, 3), ")"),
+      x = i,
+      y = "precio.house.m2"
+    )
+  plot(p)
+}
+```
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
 library(dplyr)
