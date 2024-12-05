@@ -1,86 +1,130 @@
 library(readxl)
 
-
-data <- read_excel("Data/data_train.xlsx")
-
-df = data
-
-# Ensure `number_of_rooms` is a factor
-df$distrito <- as.factor(df$distrito)
-post_categories <- list()
-
-
-# Loop over each pair of categories
-for (n in 1:100) {
-  print(n)
-  # get categories
-  categories <- levels(df$distrito)
-  categories <- categories[sample(length(categories))]
+# Function to perform iterative merging of categories based on t-test
+merge_categories <- function(df, var_name, response_var) {
   
-  print(paste("pre",categories))
-  df_temp = df
+  # Ensure the selected variable is a factor
+  df[[var_name]] <- as.factor(df[[var_name]])
+  post_categories <- list()
   
-  i = 1
-  while (i <= length(categories)) {
-    j = i+1
-    while (j <= length(categories)) {
-      # Subset data for the two categories
-      category_i <- categories[i]
-      category_j <- categories[j]
+  # Loop over each pair of categories
+  for (n in 1:500) {
+    # Get categories
+    categories <- levels(df[[var_name]])
+    categories <- categories[sample(length(categories))]
     
-      # Perform t-test between the two categories
-      t_test <- t.test(precio.house.m2 ~ distrito, 
-                       data = df_temp[df_temp$distrito %in% c(category_i, category_j), ])
-      
-      print(paste(category_i,category_j,t_test$p.value))
-      
-      # If p-value is less than 0.05, merge the two categories
-      if (t_test$p.value > 0.05) {
-        new_level <- paste0(category_i, "+", category_j)  # Create new merged level name
-        new_level <- paste(sort(c(category_i, category_j)), collapse = "+")  # Create new merged level name in alphabetical order
+    df_temp <- df
+    
+    i <- 1
+    while (i <= length(categories)) {
+      j <- i + 1
+      while (j <= length(categories)) {
+        # Subset data for the two categories
+        category_i <- categories[i]
+        category_j <- categories[j]
         
+        # Perform t-test between the two categories
+        t_test <- t.test(
+          as.formula(paste(response_var, "~", var_name)), 
+          data = df_temp[df_temp[[var_name]] %in% c(category_i, category_j), ]
+        )
         
-        levels(df_temp$distrito) <- c(levels(df_temp$distrito), new_level)  # Add the new level
-        # Merge the two categories
-        df_temp$distrito[df_temp$distrito %in% c(category_i, category_j)] <- new_level
-        
-        df_temp$distrito <- factor(df_temp$distrito, levels = setdiff(levels(df_temp$distrito), category_i))
-        df_temp$distrito <- factor(df_temp$distrito, levels = setdiff(levels(df_temp$distrito), category_j))
-        
-        # Update the category list after merging
-        categories <- levels(df_temp$distrito)
-      
-        # reset
-        i = 1
-        j = i+1
+        # If p-value is less than 0.05, merge the two categories
+        if (t_test$p.value > 0.05) {
+          new_level <- paste(sort(c(category_i, category_j)), collapse = "+")  # Alphabetical order
+          
+          levels(df_temp[[var_name]]) <- c(levels(df_temp[[var_name]]), new_level)  # Add new level
+          
+          # Merge the two categories
+          df_temp[[var_name]][df_temp[[var_name]] %in% c(category_i, category_j)] <- new_level
+          
+          # Remove old levels
+          df_temp[[var_name]] <- factor(df_temp[[var_name]], levels = setdiff(levels(df_temp[[var_name]]), c(category_i, category_j)))
+          
+          # Update the category list after merging
+          categories <- levels(df_temp[[var_name]])
+          
+          # Reset indices
+          i <- 1
+          j <- i + 1
+        } else {
+          j <- j + 1
+        }
+      }
+      i <- i + 1
+    }
+    post_categories[[n]] <- categories  # Save the post categories for this iteration
+  }
   
-      }else {
-        j = j+1
+  
+  # Flatten post_categories into a single vector
+  all_categories <- unlist(post_categories)
+  
+  # Count the occurrences of each category
+  category_counts <- table(all_categories)
+  category_counts_sorted <- sort(category_counts, decreasing = TRUE)
+  categories_old <- levels(df[[var_name]])
+  
+  categorization = list()
+  
+  print("Select go")
+  print(categories_old)
+  
+  for( i in 1:length(category_counts_sorted)){
+    names = names(category_counts_sorted)[i]
+    names_split = strsplit(names(category_counts_sorted)[i], "\\+")[[1]]
+    
+    category = ""
+    added = FALSE
+    
+    for (name in names_split){
+      print(name)
+      # Remove specific names
+      if (name %in% categories_old){
+        
+        categories_old <- categories_old[!categories_old %in% c(name)]
+        print(categories_old)
+        
+        category = paste0(category,"+",name)
+        added = TRUE
       }
     }
-    i = i+1
+    if (added){
+      categorization = c(categorization, category)
+    }
   }
-  print(paste("post",categories))
-  post_categories[[n]] <- categories  # Save the post categories for this iteration
-  
+  return(categorization)
 }
 
-# Flatten post_categories into a single vector
-all_categories <- unlist(post_categories)
 
-# Count the occurrences of each category
-category_counts <- table(all_categories)
-category_counts_sorted <- sort(category_counts, decreasing = TRUE)
-print(category_counts_sorted)
 
-# Plot the histogram
-par(mar = c(5, 4, 4, 2) + 15)  # Increase the bottom margin (first value)
-barplot(category_counts,
-        main = "Histogram of Post Categories",
-        xlab = "Categories",
-        ylab = "Frequency",
-        col = "skyblue",
-        las = 2)  # Rotate axis labels for readability
+
+### run 
+
+# load data
+data <- read_excel("Data/data_train.xlsx")
+
+#reprocess
+data$tipo.casa[data$tipo.casa %in% c("Otros")] = "piso"
+
+data$distrito <- as.factor(data$distrito)
+data$estado <- as.factor(data$estado)
+data$banos <- as.factor(data$banos)
+data$dorm <- as.factor(data$dorm)
+data$tipo.casa <- as.factor(data$tipo.casa)
+
+# call function
+categorization <- merge_categories(data, var_name = "estado", response_var = "precio.house.m2")
+
+# print results
+print(categorization)
+
+
+# t.test(
+#   formula = as.formula(paste("precio.house.m2", "~", "estado")), 
+#   data = data[data$estado %in% c("buen_estado", "segunda_mano"), ]
+# )
+
 
 
 
