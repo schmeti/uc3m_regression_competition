@@ -172,7 +172,26 @@ gam_model <- gam(gam_formula, data = data_train)
 summary(gam_model)
 
 
+### ALL INTERACTIONS
 
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], "y")
+num_vars
+cat_vars <- names(data_train)[!num_id]
+cat_vars
+
+interact_lm_formula <- as.formula(
+  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", ":", "(", paste(cat_vars, collapse = " + "), ")" )
+)
+interact_lm_model = lm(interact_lm_formula,data = data_train)
+summary(interact_lm_model)
+
+interact_lm_BIC <- stepAIC(interact_lm_model, direction = 'both', k = log(n))
+summary(interact_lm_BIC)
+
+# Save the model to a file and load it
+save(interact_lm_BIC, file = "interact_lm_BIC.RData")
+load("interact_lm_BIC.RData")
 
 
 
