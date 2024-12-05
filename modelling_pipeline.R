@@ -247,6 +247,11 @@ preprocess = function(data,
     matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
   ) / 1000  # Convert meters to kilometers
   
+  # Turn categorical columns to factors
+  factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
+                      "ascensor", "estado", "comercial", "casco.historico", "M.30")
+  data[factor_columns] <- lapply(data[factor_columns], as.factor)
+  
   # group categories via manual evaluation
   # Dorm
   data <- data %>%
@@ -315,14 +320,20 @@ preprocess = function(data,
     )
   data$distrito <- factor(data$distrito, levels = unique(data$distrito))
   
-  # normalize latitude and longitude
-  data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
-  data$latitud <- (data$latitud - mean(data$latitud))/sd(data$latitud)
+  # Function to normalize multiple variables
+  normalize_variables <- function(variables) {
+    for (var in variables) {
+      data[[var]] <- (data[[var]] - mean(data[[var]], na.rm = TRUE)) / sd(data[[var]], na.rm = TRUE)
+    }
+    return(data)
+  }
   
-  # Turn categorical columns to factors
-  factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
-                      "ascensor", "estado", "comercial", "casco.historico", "M.30")
-  data[factor_columns] <- lapply(data[factor_columns], as.factor)
+  
+  # Generate the formula automatically
+  num_id <- sapply(data, is.numeric)
+  num_vars <- names(data)[num_id]
+  
+  data = normalize_variables(num_vars)
   
   # Eliminar columnas no deseadas
   data <- subset(data, select=predictors)
