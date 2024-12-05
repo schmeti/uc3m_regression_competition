@@ -308,7 +308,7 @@ fit_ps_model = function(data_train){
   
   # Create the formula with p-splines for numerical vars. and straight categorical vars.
   gam_formula <- as.formula(
-    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
   )
   # Fit the GAM 
   gam_model <- gam(gam_formula, data = data_train)

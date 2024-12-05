@@ -148,7 +148,7 @@ check_multicollinearity(lm_BIC, data = data_train)
 ### Step AIC
 lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
 summary(lm_AIC)
-
+check_multicollinearity(lm_AIC, data = data_train)
 
 # Create the formula with p-splines for numerical vars. and straight categorical vars.
 predictors <- labels(terms(lm_BIC))
@@ -156,15 +156,42 @@ num_id <- sapply(data_train[predictors], is.numeric)
 num_vars <- names(data_train[predictors])[num_id]
 cat_vars <- names(data_train[predictors])[!num_id]
 
+# Create a fucntion to automatically normalize the numerical vars
+normalize = function(row){
+  row = (row - mean(row))/sd(row)
+  return(row)
+}
+
+data_train[num_vars] = apply(data_train[num_vars], 2, normalize)
+
 gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
 )
 # Fit the GAM 
 gam_model <- gam(gam_formula, data = data_train)
 summary(gam_model)
 
 
+### ALL INTERACTIONS
 
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], "y")
+num_vars
+cat_vars <- names(data_train)[!num_id]
+cat_vars
+
+interact_lm_formula <- as.formula(
+  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", ":", "(", paste(cat_vars, collapse = " + "), ")" )
+)
+interact_lm_model = lm(interact_lm_formula,data = data_train)
+summary(interact_lm_model)
+
+interact_lm_BIC <- stepAIC(interact_lm_model, direction = 'both', k = log(n))
+summary(interact_lm_BIC)
+
+# Save the model to a file and load it
+save(interact_lm_BIC, file = "interact_lm_BIC.RData")
+load("interact_lm_BIC.RData")
 
 
 
