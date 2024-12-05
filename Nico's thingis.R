@@ -148,7 +148,7 @@ check_multicollinearity(lm_BIC, data = data_train)
 ### Step AIC
 lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
 summary(lm_AIC)
-
+check_multicollinearity(lm_AIC, data = data_train)
 
 # Create the formula with p-splines for numerical vars. and straight categorical vars.
 predictors <- labels(terms(lm_BIC))
@@ -156,8 +156,16 @@ num_id <- sapply(data_train[predictors], is.numeric)
 num_vars <- names(data_train[predictors])[num_id]
 cat_vars <- names(data_train[predictors])[!num_id]
 
+# Create a fucntion to automatically normalize the numerical vars
+normalize = function(row){
+  row = (row - mean(row))/sd(row)
+  return(row)
+}
+
+data_train[num_vars] = apply(data_train[num_vars], 2, normalize)
+
 gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
 )
 # Fit the GAM 
 gam_model <- gam(gam_formula, data = data_train)
