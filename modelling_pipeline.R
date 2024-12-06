@@ -248,7 +248,7 @@ preprocess = function(data,
   ) / 1000  # Convert meters to kilometers
   
   # Turn categorical columns to factors
-  factor_columns <- c("barrio", "distrito", "dorm", "tipo.casa", "inter.exter", 
+  factor_columns <- c("barrio", "distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
   
