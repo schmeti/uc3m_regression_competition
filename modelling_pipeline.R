@@ -330,8 +330,8 @@ preprocess = function(data,
   
   
   # Generate the formula automatically
-  num_id <- sapply(data, is.numeric)
-  num_vars <- names(data)[num_id]
+  num_id <- sapply(data, is.numeric) 
+  num_vars <- names(data)[num_id] %>% setdiff(c("precio.house.m2", "radius"))
   
   data = normalize_variables(num_vars)
   
