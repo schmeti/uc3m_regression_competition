@@ -41,3 +41,8 @@ n <- nrow(X)
 p <- ncol(X)
 R2_adj <- 1 - (1 - R2) * (n - 1) / (n - p - 1)
 R2_adj
+
+# Coefficients
+coef_ridge <- predict(fit.ridge, type = "coefficients", s = opt_lambda)
+print(coef_ridge)
+
