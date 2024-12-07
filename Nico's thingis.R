@@ -200,16 +200,44 @@ plots <- lapply(total_AIC_interactions, function(interaction) {
   vars <- unlist(strsplit(interaction, ":"))
   
   ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
-    geom_point() +
+    geom_point(alpha = 0.25) +
     geom_smooth(method = "lm", se = FALSE) +
     labs(title = paste("Interaction:", interaction),
          x = vars[1], y = "y") +
     theme_minimal()
 })
+### Exponential Tryout
+plots_exp <- lapply(total_AIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  # Fit the linear model with interaction
+  formula <- as.formula(paste("y ~", paste(vars, collapse = "*")))
+  model <- lm(formula, data = data_train)
+  
+  # Create a new data frame with all combinations of unique values of vars[1] and vars[2]
+  pred_data <- expand.grid(
+    var1 = unique(data_train[[vars[1]]]),
+    var2 = unique(data_train[[vars[2]]])
+  )
+  names(pred_data) = c(as.name(vars[1]), as.name(vars[2]))
+  
+  # Add the predicted values
+  pred_data$predicted <- exp(predict(model, newdata = pred_data))
+  
+  # Plot
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = exp(y), color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +  # Set the transparency level for points
+    geom_line(data = pred_data, 
+              aes(x = !!as.name(vars[1]), y = predicted, color = factor(!!as.name(vars[2]))),  # Ensure 'var2' is a factor for color mapping
+              linewidth = 1) +  # Make the geom_smooth more noticeable
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "exp(y)") +
+    theme_minimal()
+})
 
 
-
-
+# BIC
 n <- 736
 total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
 summary(total_lm_BIC)
