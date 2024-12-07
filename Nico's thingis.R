@@ -130,6 +130,14 @@ num_vars <- setdiff(names(data_train)[num_id],"y")
 predictors <- c("ref.hip.zona", "antig", "Poca_limp", "PM10", "Pobl.0_14_div_Poblac.Total" ,   "PoblJubilada_div_Poblac.Total", "Inmigrantes.porc", "Pocas_zonas")
 cat_vars = factor_columns
 
+# Create a fucntion to automatically normalize the numerical vars
+normalize = function(row){
+  row = (row - mean(row))/sd(row)
+  return(row)
+}
+
+data_train[setdiff(num_vars, "radius")] = apply(data_train[setdiff(num_vars, "radius")], 2, normalize)
+
 
 #### No interactions
 lm_formula <- as.formula(
@@ -156,13 +164,6 @@ num_id <- sapply(data_train[predictors], is.numeric)
 num_vars <- names(data_train[predictors])[num_id]
 cat_vars <- names(data_train[predictors])[!num_id]
 
-# Create a fucntion to automatically normalize the numerical vars
-normalize = function(row){
-  row = (row - mean(row))/sd(row)
-  return(row)
-}
-
-data_train[num_vars] = apply(data_train[num_vars], 2, normalize)
 
 gam_formula <- as.formula(
   paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
@@ -172,7 +173,55 @@ gam_model <- gam(gam_formula, data = data_train)
 summary(gam_model)
 
 
-### ALL INTERACTIONS
+### ALL MODEL
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], "y")
+num_vars
+cat_vars <- names(data_train)[!num_id]
+cat_vars
+
+total_lm_formula <- as.formula(
+  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", "*", "(", paste(cat_vars, collapse = " + "), ")" )
+)
+total_lm_model = lm(total_lm_formula,data = data_train)
+summary(total_lm_model)
+
+n <- 736
+total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
+summary(total_lm_BIC)
+# check_multicollinearity(total_lm_BIC, data = data_train)
+# Doesn't work with interactions !!!!!!!
+total_predictors <- labels(terms(total_lm_BIC))
+total_nums <- total_predictors[1:11]
+total_cats <- total_predictors[12:16]
+half_total_lm_formula <- as.formula(
+  paste("y ~", "(", paste(total_nums, collapse = " + "), ")", "+", "(", paste(total_cats, collapse = " + "), ")" )
+)
+half_total_lm_model = lm(half_total_lm_formula,data = data_train)
+summary(half_total_lm_model)
+check_multicollinearity(half_total_lm_model, data = data_train)
+# CN = 18.92 MUY ALTO
+
+
+save(total_lm_BIC, file = "total_lm_BIC.RData")
+load("total_lm_BIC.RData")
+total_predictors <- labels(terms(total_lm_BIC))
+total_nums <- total_predictors[1:11]
+total_cats <- total_predictors[12:16]
+total_interacts <- total_predictors[17:26]
+
+total_gam_formula <- as.formula(
+  paste("y ~", paste(c(paste0("s(", total_nums, ", bs='ps', m = 3)"), total_cats, total_interacts), collapse = " + "))
+)
+# Fit the GAM 
+total_gam_model <- gam(total_gam_formula, data = data_train)
+summary(total_gam_model)
+
+### OJO eliminar variabels potencailmente correladas???
+
+
+
+### ALL INTERACTIONS (WORSE TAHN THE PREVIOUS SECTION AAAAAAAAAAAAAAA)
 
 num_id <- sapply(data_train, is.numeric)
 num_vars <- setdiff(names(data_train)[num_id], "y")
@@ -215,7 +264,7 @@ summary(full_lm_AIC)
 
 
 full_gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars, interact_predictors), collapse = " + "))
+  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"), cat_vars, interact_predictors), collapse = " + "))
 )
 # Fit the GAM 
 full_gam_model <- gam(full_gam_formula, data = data_train)
@@ -223,9 +272,9 @@ summary(full_gam_model)
 
 # After - BIC GAM formula
 predictors <- labels(terms(full_lm_BIC))
-std_num_predictors <- predictors[1:5]
-std_cat_predictors <- predictors[6:10]
-interact_predictors <- predictors[11:15]
+std_num_predictors <- predictors[1:4]
+std_cat_predictors <- predictors[5:10]
+interact_predictors <- predictors[11:13]
 full_gam_formula_BIC <- as.formula(
   paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
 )
