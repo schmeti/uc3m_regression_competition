@@ -190,7 +190,24 @@ total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 summary(total_lm_AIC)
 save(total_lm_AIC, file = "total_lm_AIC.RData")
 load("total_lm_AIC.RData")
-total_predictors <- labels(terms(total_lm_AIC))
+total_AIC_predictors <- labels(terms(total_lm_AIC))
+total_AIC_interactions = total_AIC_predictors[34:length(total_AIC_predictors)]
+
+
+# Create plots for each interaction
+plots <- lapply(total_AIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "y") +
+    theme_minimal()
+})
+
+
 
 
 n <- 736
