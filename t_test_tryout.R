@@ -67,8 +67,6 @@ merge_categories <- function(df, var_name, response_var) {
   
   categorization = list()
   
-  print("Select go")
-  print(categories_old)
   
   for( i in 1:length(category_counts_sorted)){
     names = names(category_counts_sorted)[i]
@@ -87,6 +85,8 @@ merge_categories <- function(df, var_name, response_var) {
         
         category = paste0(category,"+",name)
         added = TRUE
+        
+        categories_old
       }
     }
     if (added){
@@ -95,7 +95,6 @@ merge_categories <- function(df, var_name, response_var) {
   }
   return(categorization)
 }
-
 
 
 
@@ -108,15 +107,18 @@ data <- read_excel("Data/data_train.xlsx")
 data$tipo.casa[data$tipo.casa %in% c("Otros")] = "piso"
 
 data$distrito <- as.factor(data$distrito)
+data$ref.hip.zona <- as.factor(data$ref.hip.zona)
+
 data$estado <- as.factor(data$estado)
 data$banos <- as.factor(data$banos)
 data$dorm <- as.factor(data$dorm)
 data$tipo.casa <- as.factor(data$tipo.casa)
 
 # call function
-categorization <- merge_categories(data, var_name = "estado", response_var = "precio.house.m2")
+categorization <- merge_categories(data, var_name = "dorm", response_var = "precio.house.m2")
 
 # print results
+print(category_counts_sorted)
 print(categorization)
 
 
@@ -124,8 +126,6 @@ print(categorization)
 #   formula = as.formula(paste("precio.house.m2", "~", "estado")), 
 #   data = data[data$estado %in% c("buen_estado", "segunda_mano"), ]
 # )
-
-
 
 
 

@@ -296,7 +296,7 @@ In this part we will be creating scatterplots of the relation between the contin
 
 ```{r, warning=FALSE}
 
-num_vars_2 = setdiff(num_vars, c("precio.house.m2", "ref.hip.zona"))
+num_vars_2 = setdiff(num_vars, c("precio.house.m2"))#, "ref.hip.zona"))
 
 for (i in num_vars_2) {
   
@@ -559,29 +559,50 @@ for (i in c("radius")) {
 library(dplyr)
 
 # Add `distrito2` to `data_train` based on the described grouping
+# data_train <- data_train %>%
+#   mutate(
+#     distrito2 = case_when(
+#       # North Districts
+#       distrito %in% c("chamartin", "tetuan", "fuencarral",
+#                       "hortaleza", "barajas") ~ "North",
+#       
+#       # Central Zone
+#       distrito %in% c("centro", "chamberi", "moncloa", "salamanca",
+#                       "retiro", "arganzuela", "latina") ~ "Central",
+#       
+#       # South Districts
+#       distrito %in% c("carabanchel", "villaverde", "usera",
+#                       "puente_vallecas", "vicalvaro", "vallecas") ~ "South",
+#       
+#       # East Districts
+#       distrito %in% c("puente_de_vallecas", "moratalaz",
+#                       "san_blas", "ciudad_lineal") ~ "East",
+#       
+#       # Outliers or other districts
+#       TRUE ~ "Other"  # Assign any unlisted districts to "Other"
+#     )
+#   )
+
+
 data_train <- data_train %>%
-  mutate(
-    distrito2 = case_when(
-      # North Districts
-      distrito %in% c("chamartin", "tetuan", "fuencarral",
-                      "hortaleza", "barajas") ~ "North",
-      
-      # Central Zone
-      distrito %in% c("centro", "chamberi", "moncloa", "salamanca",
-                      "retiro", "arganzuela", "latina") ~ "Central",
-      
-      # South Districts
-      distrito %in% c("carabanchel", "villaverde", "usera",
-                      "puente_vallecas", "vicalvaro", "vallecas") ~ "South",
-      
-      # East Districts
-      distrito %in% c("puente_de_vallecas", "moratalaz",
-                      "san_blas", "ciudad_lineal") ~ "East",
-      
-      # Outliers or other districts
-      TRUE ~ "Other"  # Assign any unlisted districts to "Other"
+    mutate(
+      distrito2 = case_when(
+        # South Districts
+        distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
+        
+        # Central Districts
+        distrito %in% c("carabanchel", "latina") ~ "South West",
+        
+        # North Districts
+        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "South West",
+        
+        # West Districts
+        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "Worth East",
+        
+        # Default to original values if no match
+        TRUE ~ as.character(distrito)
+      )
     )
-  )
 
 head(data_train)
 
