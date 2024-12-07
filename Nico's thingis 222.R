@@ -63,6 +63,72 @@ check_multicollinearity <- function(model, data) {
   ))
 }
 
+### K-fold CV ------------------------------------------------------------------
+k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+fit_linear_model = function(formula, data_train){
+  model = lm(formula,data = data_train)
+  return(model)
+}
+
+k_fold_cv_linear_model <- function(model_formula, 
+                                   data_train,
+                                   k=10){
+  cat("=== running k_fold Cross Validation ===")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_linear_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # rmse
+    cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$y)^2))
+    
+    # rsq adj
+    n_train = nrow(temp_train)
+    num_predictors = ncol(temp_train)-1
+    
+    SSE = sum((temp_test$y - temp_predictions )^2)
+    SSR = sum((mean(temp_test$y) - temp_predictions)^2)
+    SST = SSE + SSE
+    
+    cv_rsq_adj[i] = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse=cv_rmse,
+              cv_rsq_adj=cv_rsq_adj))
+}
+
+
 data <- read_excel("Data/data_train.xlsx")
 
 # radius
@@ -110,6 +176,8 @@ data$precio.house.m2 <- NULL
 data$barrio <- NULL
 data$cod_barrio <- NULL
 data$cod_distrito <- NULL
+data$log.sup.util <- log(data$sup.util) 
+data$sup.util <- NULL
 data$sup.const <- NULL
 factor_columns <- c("distrito", "dorm", "banos", "tipo.casa", "inter.exter", 
                     "ascensor", "estado", "comercial", "casco.historico", "M.30")
@@ -146,18 +214,30 @@ lm_formula <- as.formula(
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
 check_multicollinearity(lm_model, data = data_train)
+k_fold_cv_linear_model(lm_formula, data_train, 10)
 
 ### Step BIC
 n <- 736
 lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
 summary(lm_BIC)
 check_multicollinearity(lm_BIC, data = data_train)
+predictors <- labels(terms(lm_BIC))
+lm_BIC_formula <- as.formula(
+  paste("y ~", paste(predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(lm_BIC_formula, data_train, 10)
 
 ### Step AIC
 lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
 summary(lm_AIC)
 check_multicollinearity(lm_AIC, data = data_train)
+predictors <- labels(terms(lm_AIC))
+lm_AIC_formula <- as.formula(
+  paste("y ~", paste(predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(lm_AIC_formula, data_train, 10)
 
+### P-Splines
 # Create the formula with p-splines for numerical vars. and straight categorical vars.
 predictors <- labels(terms(lm_BIC))
 num_id <- sapply(data_train[predictors], is.numeric)
@@ -173,6 +253,8 @@ gam_model <- gam(gam_formula, data = data_train)
 summary(gam_model)
 
 
+# ------------------------------------------------------------------------------
+
 ### ALL MODEL
 num_id <- sapply(data_train, is.numeric)
 num_vars <- setdiff(names(data_train)[num_id], "y")
@@ -185,11 +267,14 @@ total_lm_formula <- as.formula(
 )
 total_lm_model = lm(total_lm_formula,data = data_train)
 summary(total_lm_model)
+k_fold_cv_linear_model(total_lm_formula, data_train, 10)
 
+
+### AIC
 total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 summary(total_lm_AIC)
-save(total_lm_AIC, file = "Modelos Nico/total_lm_AIC.RData")
-load("Modelos Nico/total_lm_AIC.RData")
+save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
+load("Modelos Nico 2/total_lm_AIC.RData")
 total_AIC_predictors <- labels(terms(total_lm_AIC))
 total_AIC_interactions = total_AIC_predictors[34:length(total_AIC_predictors)]
 
@@ -237,24 +322,64 @@ plots_exp <- lapply(total_AIC_interactions, function(interaction) {
 })
 
 
-# BIC
+### BIC
 n <- 736
 total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
 summary(total_lm_BIC)
-# check_multicollinearity(total_lm_BIC, data = data_train)
-# Doesn't work with interactions !!!!!!!
-# total_predictors <- labels(terms(total_lm_BIC))
-# total_nums <- total_predictors[1:11]
-# total_cats <- total_predictors[12:16]
-# half_total_lm_formula <- as.formula(
-#   paste("y ~", "(", paste(total_nums, collapse = " + "), ")", "+", "(", paste(total_cats, collapse = " + "), ")" )
-# )
-# half_total_lm_model = lm(half_total_lm_formula,data = data_train)
-# summary(half_total_lm_model)
-# check_multicollinearity(half_total_lm_model, data = data_train)
-# CN = 18.92 MUY ALTO
-save(total_lm_BIC, file = "Modelos Nico/total_lm_BIC.RData")
-load("Modelos Nico/total_lm_BIC.RData")
+save(total_lm_BIC, file = "Modelos Nico 2/total_lm_BIC.RData")
+load("Modelos Nico 2/total_lm_BIC.RData")
+predictors <- labels(terms(total_lm_BIC))
+total_lm_BIC_formula <- as.formula(
+  paste("y ~", paste(predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_lm_BIC_formula, data_train, 10)
+
+total_BIC_interactions <- predictors[17:31]
+
+# Create plots for each interaction
+plots <- lapply(total_BIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "y") +
+    theme_minimal()
+})
+### Exponential Tryout
+plots_exp <- lapply(total_BIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  # Fit the linear model with interaction
+  formula <- as.formula(paste("y ~", paste(vars, collapse = "*")))
+  model <- lm(formula, data = data_train)
+  
+  # Create a new data frame with all combinations of unique values of vars[1] and vars[2]
+  pred_data <- expand.grid(
+    var1 = unique(data_train[[vars[1]]]),
+    var2 = unique(data_train[[vars[2]]])
+  )
+  names(pred_data) = c(as.name(vars[1]), as.name(vars[2]))
+  
+  # Add the predicted values
+  pred_data$predicted <- exp(predict(model, newdata = pred_data))
+  
+  # Plot
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = exp(y), color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +  # Set the transparency level for points
+    geom_line(data = pred_data, 
+              aes(x = !!as.name(vars[1]), y = predicted, color = factor(!!as.name(vars[2]))),  # Ensure 'var2' is a factor for color mapping
+              linewidth = 1) +  # Make the geom_smooth more noticeable
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "exp(y)") +
+    theme_minimal()
+})
+
+
+### GAM
 total_predictors <- labels(terms(total_lm_BIC))
 total_nums <- total_predictors[1:11]
 total_cats <- total_predictors[12:16]
@@ -268,6 +393,13 @@ total_gam_model <- gam(total_gam_formula, data = data_train)
 summary(total_gam_model)
 
 ### OJO eliminar variabels potencailmente correladas???
+
+
+
+
+
+
+
 
 
 
@@ -289,8 +421,8 @@ interact_lm_BIC <- stepAIC(interact_lm_model, direction = 'both', k = log(n))
 summary(interact_lm_BIC)
 
 # Save the model to a file and load it
-save(interact_lm_BIC, file = "Modelos Nico/interact_lm_BIC.RData")
-load("Modelos Nico/interact_lm_BIC.RData")
+save(interact_lm_BIC, file = "Modelos Nico 2/interact_lm_BIC.RData")
+load("Modelos Nico 2/interact_lm_BIC.RData")
 interact_predictors <- labels(terms(interact_lm_BIC))
 
 ### Full lm model BIC vars
