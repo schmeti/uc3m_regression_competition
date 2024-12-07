@@ -186,23 +186,28 @@ total_lm_formula <- as.formula(
 total_lm_model = lm(total_lm_formula,data = data_train)
 summary(total_lm_model)
 
+total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
+summary(total_lm_AIC)
+save(total_lm_AIC, file = "total_lm_AIC.RData")
+load("total_lm_AIC.RData")
+total_predictors <- labels(terms(total_lm_AIC))
+
+
 n <- 736
 total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
 summary(total_lm_BIC)
 # check_multicollinearity(total_lm_BIC, data = data_train)
 # Doesn't work with interactions !!!!!!!
-total_predictors <- labels(terms(total_lm_BIC))
-total_nums <- total_predictors[1:11]
-total_cats <- total_predictors[12:16]
-half_total_lm_formula <- as.formula(
-  paste("y ~", "(", paste(total_nums, collapse = " + "), ")", "+", "(", paste(total_cats, collapse = " + "), ")" )
-)
-half_total_lm_model = lm(half_total_lm_formula,data = data_train)
-summary(half_total_lm_model)
-check_multicollinearity(half_total_lm_model, data = data_train)
+# total_predictors <- labels(terms(total_lm_BIC))
+# total_nums <- total_predictors[1:11]
+# total_cats <- total_predictors[12:16]
+# half_total_lm_formula <- as.formula(
+#   paste("y ~", "(", paste(total_nums, collapse = " + "), ")", "+", "(", paste(total_cats, collapse = " + "), ")" )
+# )
+# half_total_lm_model = lm(half_total_lm_formula,data = data_train)
+# summary(half_total_lm_model)
+# check_multicollinearity(half_total_lm_model, data = data_train)
 # CN = 18.92 MUY ALTO
-
-
 save(total_lm_BIC, file = "total_lm_BIC.RData")
 load("total_lm_BIC.RData")
 total_predictors <- labels(terms(total_lm_BIC))
