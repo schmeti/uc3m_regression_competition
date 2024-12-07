@@ -247,40 +247,93 @@ preprocess = function(data,
     matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
   ) / 1000  # Convert meters to kilometers
   
-  # group categories via manual evaluation
-  # distric
-  data$distrito[data$distrito %in% c("carabanchel", "puente_vallecas", "usera","vallecas","villaverde")] = "south"
-  data$distrito[data$distrito %in% c("arganzuela", "centro", "chamberi","retiro","salamanca")] = "centro"
-  data$distrito[data$distrito %in% c("barajas", "chamartin", "fuencarral", "hortaleza", "tetuan")] = "north"
-  data$distrito[data$distrito %in% c("moncloa","latina")] = "west"
-  data$distrito[data$distrito %in% c("vallecas","moratalaz","vicalvaro","san_blas","ciudad_lineal")] = "east"
-
-  # dorm
-  data$dorm[data$dorm %in% c("0","1")] = "0&1"
-  data$dorm[data$dorm %in% c("3","4")] = "3&4"
-  data$dorm[data$dorm %in% c("5","6","7","8","9","10")] = "5+"
-
-  # banos
-  data$banos[data$banos %in% c("3","4","5","6","7","8")] = "3+"
-
-  # type
-  data$tipo.casa[data$tipo.casa %in% c("Otros","piso")] = "piso"
-  data$tipo.casa[data$tipo.casa %in% c("chalet","duplex")] = "chalet+duplex"
-  data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
-
-  # state
-  data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
-  data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
-  data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "malo"
-
-  # normalize latitude and longitude
-  data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
-  data$latitud <- (data$latitud - mean(data$latitud))/sd(data$latitud)
-  
   # Turn categorical columns to factors
-  factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
+  factor_columns <- c("barrio", "distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
+  
+  # group categories via manual evaluation
+  # Dorm
+  data <- data %>%
+    mutate(
+      dorm = case_when(
+        dorm %in% c("0", "1") ~ "0-1",
+        dorm %in% c("4", "5", "6", "7") ~ "+4",
+        TRUE ~ as.character(dorm)  
+      )
+    )
+  data$dorm <- factor(data$dorm, levels = unique(data$dorm))
+  
+  # Banos
+  data <- data %>%
+    mutate(
+      banos = case_when(
+        banos %in% c("3", "4", "5", "7") ~ "+3",
+        TRUE ~ as.character(banos)  
+      )
+    )
+  data$banos <- factor(data$banos, levels = unique(data$banos))
+  
+  # tipo.casa
+  data <- data %>%
+    mutate(
+      tipo.casa = case_when(
+        tipo.casa %in% c("atico", "estudio", "Otros") ~ "Atico/Estudio",
+        TRUE ~ as.character(tipo.casa)  
+      )
+    )
+  data$tipo.casa <- factor(data$tipo.casa, levels = unique(data$tipo.casa))
+  
+  # estado
+  data <- data %>%
+    mutate(
+      estado = case_when(
+        estado %in% c("a_reformar", "reg,-mal") ~ "Low_standards",
+        estado %in% c("excelente", "nuevo-semin,", "reformado") ~ "High_standards",
+        estado %in% c("buen_estado", "segunda_mano") ~ "Mid_standards",
+      )
+    )
+  data$estado <- factor(data$estado, levels = unique(data$estado))
+  
+  
+  data <- data %>%
+    mutate(
+      distrito = case_when(
+        # South Districts
+        distrito %in% c("carabanchel", "puente_vallecas", "usera", "vallecas", "villaverde") ~ "South",
+        
+        # Central Districts
+        distrito %in% c("arganzuela", "centro", "chamberi", "retiro", "salamanca") ~ "Centro",
+        
+        # North Districts
+        distrito %in% c("barajas", "chamartin", "fuencarral", "hortaleza", "tetuan") ~ "North",
+        
+        # West Districts
+        distrito %in% c("moncloa", "latina") ~ "West",
+        
+        # East Districts
+        distrito %in% c("vallecas", "moratalaz", "vicalvaro", "san_blas", "ciudad_lineal") ~ "East",
+        
+        # Default to original values if no match
+        TRUE ~ as.character(distrito)
+      )
+    )
+  data$distrito <- factor(data$distrito, levels = unique(data$distrito))
+  
+  # Function to normalize multiple variables
+  normalize_variables <- function(variables) {
+    for (var in variables) {
+      data[[var]] <- (data[[var]] - mean(data[[var]], na.rm = TRUE)) / sd(data[[var]], na.rm = TRUE)
+    }
+    return(data)
+  }
+  
+  
+  # Generate the formula automatically
+  num_id <- sapply(data, is.numeric) 
+  num_vars <- names(data)[num_id] %>% setdiff(c("precio.house.m2", "radius"))
+  
+  data = normalize_variables(num_vars)
   
   # Eliminar columnas no deseadas
   data <- subset(data, select=predictors)
