@@ -83,13 +83,13 @@ k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
 ### Loop to find a comprehensively balanced seed for the k-fold
 seed <- 1 
 mix <- 1000000
-k = 10
+k = 4
 Tot_table <- list()
 n <- 736
 for (var in cat_vars){
   Tot_table[[as.name(var)]] = table(data[[as.name(var)]])/n
 }
-for (i in 1:500){
+for (i in 1:2000){
   set.seed(i)
   folded_data <- fold(data_train, 
                       k = k, 
@@ -103,12 +103,14 @@ for (i in 1:500){
       mix_aux= mix_aux + sum(abs(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll - Tot_table[[as.name(var)]]))
     }
   }
+  print(i)
+  print(mix_aux)
   if (mix_aux < mix){
     seed <- i
     mix <- mix_aux
   }
 }
-print(seed) # Up until 500 ---> 44 is the best seed
+print(seed) # Up until 2000 ---> 416 is the best (k=4) 44 is the best seed (k=10)
 for (j in 1:k){
   print(paste(j, "- Fold   ==================================================="))
   for(var in cat_vars){
@@ -118,9 +120,9 @@ for (j in 1:k){
   }
 }
 
-k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   # Set the previously studied best seed (balance-wise)
-  set.seed(44)
+  set.seed(416)
   
   # Create a k-fold partition with balanced cat_vars and which
   # tries to minimize similar values in obj_var
@@ -144,8 +146,8 @@ fit_linear_model = function(formula, data_train){
 
 k_fold_cv_linear_model <- function(model_formula, 
                                    data_train,
-                                   k=10){
-  cat("=== running k_fold Cross Validation ===")
+                                   k=4){
+  cat("=== Running k_fold Cross Validation === \\")
   
   # Create the K-fold partition
   folded_data <- k_fold(data_train,k)$.folds
@@ -167,18 +169,23 @@ k_fold_cv_linear_model <- function(model_formula,
     
     ## Calculate error metrics and store them
     
-    # rmse
-    cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$y)^2))
-    
     # rsq adj
     n_train = nrow(temp_train)
-    num_predictors = ncol(temp_train)-1
+    n_test = nrow(temp_test)
+    num_predictors = length(coefficients(temp_model)) 
     
-    SSE = sum((temp_test$y - temp_predictions )^2)
-    SSR = sum((mean(temp_test$y) - temp_predictions)^2)
-    SST = SSE + SSE
+    SSE = sum(((temp_test$y) - (temp_predictions))^2)
+    temp_mean = mean((temp_test$y))
+    SSR = sum((temp_mean -(temp_predictions))^2)
+    SST = SSE + SSR
     
-    cv_rsq_adj[i] = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
+    cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # rmse
+    cv_rmse[i] <- sqrt(SSE/n_test)
+    
+    SSE = 0
+    SST = 0
   }
   
   # Return the vector with rmse for each k-fold
@@ -272,7 +279,7 @@ lm_formula <- as.formula(
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
 check_multicollinearity(lm_model, data = data_train)
-k_fold_cv_linear_model(lm_formula, data_train, 10)
+k_fold_cv_linear_model(lm_formula, data_train)
 
 ### Step BIC
 n <- 736
@@ -283,7 +290,7 @@ predictors <- labels(terms(lm_BIC))
 lm_BIC_formula <- as.formula(
   paste("y ~", paste(predictors, collapse = " + "))
 )
-k_fold_cv_linear_model(lm_BIC_formula, data_train, 10)
+k_fold_cv_linear_model(lm_BIC_formula, data_train)
 
 ### Step AIC
 lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
@@ -293,7 +300,7 @@ predictors <- labels(terms(lm_AIC))
 lm_AIC_formula <- as.formula(
   paste("y ~", paste(predictors, collapse = " + "))
 )
-k_fold_cv_linear_model(lm_AIC_formula, data_train, 10)
+k_fold_cv_linear_model(lm_AIC_formula, data_train)
 
 ### P-Splines
 # Create the formula with p-splines for numerical vars. and straight categorical vars.
@@ -325,13 +332,13 @@ total_lm_formula <- as.formula(
 )
 total_lm_model = lm(total_lm_formula,data = data_train)
 summary(total_lm_model)
-k_fold_cv_linear_model(total_lm_formula, data_train, 10)
+k_fold_cv_linear_model(total_lm_formula, data_train)
 
 
 ### AIC
-total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
+#total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 summary(total_lm_AIC)
-save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
+#save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
 load("Modelos Nico 2/total_lm_AIC.RData")
 total_AIC_predictors <- labels(terms(total_lm_AIC))
 total_AIC_interactions = total_AIC_predictors[34:length(total_AIC_predictors)]
@@ -382,15 +389,15 @@ plots_exp <- lapply(total_AIC_interactions, function(interaction) {
 
 ### BIC
 n <- 736
-total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
+#total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
 summary(total_lm_BIC)
-save(total_lm_BIC, file = "Modelos Nico 2/total_lm_BIC.RData")
+#save(total_lm_BIC, file = "Modelos Nico 2/total_lm_BIC.RData")
 load("Modelos Nico 2/total_lm_BIC.RData")
 predictors <- labels(terms(total_lm_BIC))
 total_lm_BIC_formula <- as.formula(
   paste("y ~", paste(predictors, collapse = " + "))
 )
-k_fold_cv_linear_model(total_lm_BIC_formula, data_train, 10)
+k_fold_cv_linear_model(total_lm_BIC_formula, data_train)
 
 total_BIC_interactions <- predictors[17:31]
 
@@ -444,7 +451,7 @@ manual_total_lm_BIC_formula <- as.formula(
 )
 manual_total_lm_BIC_model <- lm(manual_total_lm_BIC_formula, data = data_train)
 summary(manual_total_lm_BIC_model)
-k_fold_cv_linear_model(manual_total_lm_BIC_formula, data_train, 10)
+k_fold_cv_linear_model(manual_total_lm_BIC_formula, data_train)
 
 ###### BIC another time
 BICx2_manual_total_lm_BIC_model <- stepAIC(manual_total_lm_BIC_model, direction = 'both', k = log(n))
@@ -478,6 +485,15 @@ total_gam_model <- gam(total_gam_formula, data = data_train)
 summary(total_gam_model)
 
 ### OJO eliminar variabels potencailmente correladas???
+
+
+
+
+
+
+
+
+
 
 
 
