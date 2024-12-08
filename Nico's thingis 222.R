@@ -137,7 +137,7 @@ k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   # Return the new dataset
   return(folded_data)
 }
-### ----------------------------------------------------------------------------
+### Linear Models CV -----------------------------------------------------------
 
 fit_linear_model = function(formula, data_train){
   model = lm(formula,data = data_train)
@@ -147,7 +147,7 @@ fit_linear_model = function(formula, data_train){
 k_fold_cv_linear_model <- function(model_formula, 
                                    data_train,
                                    k=4){
-  cat("=== Running k_fold Cross Validation === \\")
+  cat("=== Running k_fold Cross Validation --- lm === \n")
   
   # Create the K-fold partition
   folded_data <- k_fold(data_train,k)$.folds
@@ -170,29 +170,83 @@ k_fold_cv_linear_model <- function(model_formula,
     ## Calculate error metrics and store them
     
     # rsq adj
-    n_train = nrow(temp_train)
     n_test = nrow(temp_test)
     num_predictors = length(coefficients(temp_model)) 
     
-    SSE = sum(((temp_test$y) - (temp_predictions))^2)
-    temp_mean = mean((temp_test$y))
-    SSR = sum((temp_mean -(temp_predictions))^2)
-    SST = SSE + SSR
+    SSE = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    SST = sum((mean(exp(temp_test$y)) - exp(temp_test$y))^2)
     
     cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
     
     # rmse
     cv_rmse[i] <- sqrt(SSE/n_test)
-    
-    SSE = 0
-    SST = 0
   }
   
   # Return the vector with rmse for each k-fold
   return(list(cv_rmse=cv_rmse,
-              cv_rsq_adj=cv_rsq_adj))
+              mean_cv_rmse = mean(cv_rmse),
+              cv_rsq_adj=cv_rsq_adj,
+              mean_cv_rsq_adj = mean(cv_rsq_adj)
+              ))
 }
 
+### GAM Models CV --------------------------------------------------------------
+
+fit_GAM_model = function(formula, data_train){
+  model = gam(formula, data = data_train)
+  return(model)
+}
+
+k_fold_cv_GAM_model <- function(model_formula, data_train, num_predictors, k=4){
+  cat("=== Running k_fold Cross Validation --- GAM === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train, k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data != i),]
+    temp_test <- data_train[which(folded_data == i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_GAM_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # Calculate SSE and SST for R^2 adjusted
+    n_test = nrow(temp_test)
+    
+    ## NOTICE THAT THE NUMBER OF PREDICTORS SHALL BE COMPUTED MANUALLY AND 
+    ## AN INPUT
+    
+    SSE = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    SST = sum((mean(exp(temp_test$y)) - exp(temp_test$y))^2)
+    
+    cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # Calculate RMSE
+    cv_rmse[i] <- sqrt(SSE / n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse=cv_rmse,
+              mean_cv_rmse = mean(cv_rmse),
+              cv_rsq_adj=cv_rsq_adj,
+              mean_cv_rsq_adj = mean(cv_rsq_adj)
+              ))
+}
+
+
+
+
+### Preprocess & Data
 
 data <- read_excel("Data/data_train.xlsx")
 
@@ -316,6 +370,13 @@ gam_formula <- as.formula(
 # Fit the GAM 
 gam_model <- gam(gam_formula, data = data_train)
 summary(gam_model)
+# Get the nº of predictor vars
+n_preds <- length(num_vars) + 1 # + (intercept)
+for (cat in cat_vars){
+  n_preds = n_preds + length(unique(data_train[[as.name(cat)]]))-1 # -1 bc of teh baseline
+}
+# Cross-val
+k_fold_cv_GAM_model(gam_formula, data_train,n_preds)
 
 
 # ------------------------------------------------------------------------------
@@ -443,9 +504,44 @@ plots_exp <- lapply(total_BIC_interactions, function(interaction) {
     theme_minimal()
 })
 
-### Manual selection of proper interactions
+### GAM
 predictors <- labels(terms(total_lm_BIC))
-predictors = setdiff(predictors, c("SO2", "Ruidos_ext:casco.historico", "Poca_limp:casco.historico", "SO2:comercial", "SO2:casco.historico", "radius:casco.historico", "log.sup.util:casco.historico"))
+num_predictors <- predictors[1:11]
+cat_predictors <- predictors[12:16]
+interaction_predcitors <- predictors[17:31]
+vars<- matrix(0, nrow = length(interaction_predcitors), ncol = 2)
+for (i in 1:length(interaction_predcitors)){
+  vars[i,] <- unlist(strsplit(interaction_predcitors[i], ":"))
+}
+
+
+total_gam_BIC <- as.formula(
+  paste("y ~", paste(c(paste0("s(", num_predictors, ", bs='ps')"),cat_predictors, paste0("s(", vars[,1], ", bs='ps', by =", vars[,2], ")")), collapse = " + "))
+)
+
+# Fit the GAM 
+total_gam_BIC_model <- gam(total_gam_BIC, data = data_train)
+summary(total_gam_BIC_model)
+
+# Get the nº of predictor vars
+n_preds <- length(num_predictors) + 1 # + (intercept)
+for (cat in cat_predictors){
+  n_preds = n_preds + length(unique(data_train[[as.name(cat)]]))-1 # -1 bc of teh baseline
+}
+for (cat in vars[,2]){
+  n_preds = n_preds + length(unique(data_train[[as.name(cat)]])) 
+}
+# Cross-val
+k_fold_cv_GAM_model(gam_formula, data_train, n_preds)
+
+
+### Manual selection of proper interactions ------------------------------------
+predictors <- labels(terms(total_lm_BIC))
+# We are looking for a quite-sparse model, so we will be not conservative
+# and eliminate all those interactions not too different
+
+## Quite sparse
+predictors = setdiff(predictors, c("SO2","Ruidos_ext", "Inmigrantes.porc" , "Ruidos_ext:comercial", "Ruidos_ext:casco.historico","Poca_limp:comercial","Poca_limp:casco.historico", "SO2:comercial", "SO2:casco.historico","Inmigrantes.porc:comercial","Inmigrantes.porc:casco.historico", "radius:casco.historico", "radius:comercial", "log.sup.util:casco.historico"))
 manual_total_lm_BIC_formula <- as.formula(
   paste("y ~", paste(predictors, collapse = " + "))
 )
@@ -453,38 +549,25 @@ manual_total_lm_BIC_model <- lm(manual_total_lm_BIC_formula, data = data_train)
 summary(manual_total_lm_BIC_model)
 k_fold_cv_linear_model(manual_total_lm_BIC_formula, data_train)
 
-###### BIC another time
-BICx2_manual_total_lm_BIC_model <- stepAIC(manual_total_lm_BIC_model, direction = 'both', k = log(n))
-summary(BICx2_manual_total_lm_BIC_model)
-predictors <- labels(terms(BICx2_manual_total_lm_BIC_model))
-BICx2_manual_total_lm_BIC_formula <- as.formula(
-  paste("y ~", paste(predictors, collapse = " + "))
+## Super sparse ---> WORSE
+predictors2 = setdiff(predictors, c("casco.historico", "banos", "log.sup.util:banos", "Delincuencia:casco.historico"))
+manual_total_lm_BIC_formula2 <- as.formula(
+  paste("y ~", paste(predictors2, collapse = " + "))
 )
-k_fold_cv_linear_model(BICx2_manual_total_lm_BIC_formula, data_train, 10)
+manual_total_lm_BIC_model2 <- lm(manual_total_lm_BIC_formula2, data = data_train)
+summary(manual_total_lm_BIC_model2)
+k_fold_cv_linear_model(manual_total_lm_BIC_formula2, data_train)
 
-
-
-
-
-
-
-
-
-
-### GAM
-total_predictors <- labels(terms(total_lm_BIC))
-total_nums <- total_predictors[1:11]
-total_cats <- total_predictors[12:16]
-total_interacts <- total_predictors[17:26]
-
-total_gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", total_nums, ", bs='ps', m = 3)"), total_cats, total_interacts), collapse = " + "))
+## Somehow more sparse ---> VERY Slightly worse
+#predictors3 = setdiff(predictors, c("casco.historico", "O3", "O3:ascensor", "Delincuencia:casco.historico"))
+predictors3 = setdiff(predictors, c("casco.historico", "Delincuencia:casco.historico"))
+#predictors3 = setdiff(predictors, c("O3", "O3:ascensor"))
+manual_total_lm_BIC_formula3 <- as.formula(
+  paste("y ~", paste(predictors3, collapse = " + "))
 )
-# Fit the GAM 
-total_gam_model <- gam(total_gam_formula, data = data_train)
-summary(total_gam_model)
-
-### OJO eliminar variabels potencailmente correladas???
+manual_total_lm_BIC_model3 <- lm(manual_total_lm_BIC_formula3, data = data_train)
+summary(manual_total_lm_BIC_model3)
+k_fold_cv_linear_model(manual_total_lm_BIC_formula3, data_train)
 
 
 
@@ -494,74 +577,4 @@ summary(total_gam_model)
 
 
 
-
-
-
-
-
-
-
-
-
-
-### ALL INTERACTIONS (WORSE TAHN THE PREVIOUS SECTION AAAAAAAAAAAAAAA)
-
-num_id <- sapply(data_train, is.numeric)
-num_vars <- setdiff(names(data_train)[num_id], "y")
-num_vars
-cat_vars <- names(data_train)[!num_id]
-cat_vars
-
-interact_lm_formula <- as.formula(
-  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", ":", "(", paste(cat_vars, collapse = " + "), ")" )
-)
-interact_lm_model = lm(interact_lm_formula,data = data_train)
-summary(interact_lm_model)
-
-interact_lm_BIC <- stepAIC(interact_lm_model, direction = 'both', k = log(n))
-summary(interact_lm_BIC)
-
-# Save the model to a file and load it
-save(interact_lm_BIC, file = "Modelos Nico 2/interact_lm_BIC.RData")
-load("Modelos Nico 2/interact_lm_BIC.RData")
-interact_predictors <- labels(terms(interact_lm_BIC))
-
-### Full lm model BIC vars
-predictors <- labels(terms(lm_BIC))
-num_id <- sapply(data_train[predictors], is.numeric)
-num_vars <- names(data_train[predictors])[num_id]
-cat_vars <- names(data_train[predictors])[!num_id]
-interact_predictors <- labels(terms(interact_lm_BIC))
-
-full_lm_formula <- as.formula(
-  paste("y ~", paste(c(num_vars, cat_vars, interact_predictors), collapse = " + "))
-)
-full_lm_model = lm(full_lm_formula,data = data_train)
-summary(full_lm_model)
-# BIC
-full_lm_BIC <- stepAIC(full_lm_model, direction = 'both', k = log(n))
-summary(full_lm_BIC)
-# AIC
-full_lm_AIC <- stepAIC(full_lm_model, direction = 'both', k = 2)
-summary(full_lm_AIC)
-
-
-full_gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"), cat_vars, interact_predictors), collapse = " + "))
-)
-# Fit the GAM 
-full_gam_model <- gam(full_gam_formula, data = data_train)
-summary(full_gam_model)
-
-# After - BIC GAM formula
-predictors <- labels(terms(full_lm_BIC))
-std_num_predictors <- predictors[1:4]
-std_cat_predictors <- predictors[5:10]
-interact_predictors <- predictors[11:13]
-full_gam_formula_BIC <- as.formula(
-  paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
-)
-# Fit the GAM 
-full_gam_model_BIC <- gam(full_gam_formula_BIC, data = data_train)
-summary(full_gam_model_BIC)
 
