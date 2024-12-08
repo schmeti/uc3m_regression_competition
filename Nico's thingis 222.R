@@ -79,6 +79,64 @@ k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
   return(folded_data)
 }
 
+#### WARNING --- IN PROGRESS
+### Loop to find a comprehensively balanced seed for the k-fold
+seed <- 1 
+mix <- 1000000
+k = 10
+Tot_table <- list()
+n <- 736
+for (var in cat_vars){
+  Tot_table[[as.name(var)]] = table(data[[as.name(var)]])/n
+}
+for (i in 1:500){
+  set.seed(i)
+  folded_data <- fold(data_train, 
+                      k = k, 
+                      cat_col = "tipo.casa",
+                      num_col = "y")
+  mix_aux <- 0
+  for (j in 1:k){
+    temp_indexes <- which(folded_data$.folds == j)
+    ll <- length(temp_indexes)
+    for(var in cat_vars){
+      mix_aux= mix_aux + sum(abs(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll - Tot_table[[as.name(var)]]))
+    }
+  }
+  if (mix_aux < mix){
+    seed <- i
+    mix <- mix_aux
+  }
+}
+print(seed) # Up until 500 ---> 44 is the best seed
+for (j in 1:k){
+  print(paste(j, "- Fold   ==================================================="))
+  for(var in cat_vars){
+    print(paste(var,"----------------------------------------------------------"))
+    print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
+    print(Tot_table[[as.name(var)]])
+  }
+}
+
+k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Set the previously studied best seed (balance-wise)
+  set.seed(44)
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+### ----------------------------------------------------------------------------
+
 fit_linear_model = function(formula, data_train){
   model = lm(formula,data = data_train)
   return(model)
@@ -377,6 +435,33 @@ plots_exp <- lapply(total_BIC_interactions, function(interaction) {
          x = vars[1], y = "exp(y)") +
     theme_minimal()
 })
+
+### Manual selection of proper interactions
+predictors <- labels(terms(total_lm_BIC))
+predictors = setdiff(predictors, c("SO2", "Ruidos_ext:casco.historico", "Poca_limp:casco.historico", "SO2:comercial", "SO2:casco.historico", "radius:casco.historico", "log.sup.util:casco.historico"))
+manual_total_lm_BIC_formula <- as.formula(
+  paste("y ~", paste(predictors, collapse = " + "))
+)
+manual_total_lm_BIC_model <- lm(manual_total_lm_BIC_formula, data = data_train)
+summary(manual_total_lm_BIC_model)
+k_fold_cv_linear_model(manual_total_lm_BIC_formula, data_train, 10)
+
+###### BIC another time
+BICx2_manual_total_lm_BIC_model <- stepAIC(manual_total_lm_BIC_model, direction = 'both', k = log(n))
+summary(BICx2_manual_total_lm_BIC_model)
+predictors <- labels(terms(BICx2_manual_total_lm_BIC_model))
+BICx2_manual_total_lm_BIC_formula <- as.formula(
+  paste("y ~", paste(predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(BICx2_manual_total_lm_BIC_formula, data_train, 10)
+
+
+
+
+
+
+
+
 
 
 ### GAM
