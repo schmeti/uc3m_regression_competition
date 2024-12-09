@@ -397,7 +397,7 @@ k_fold_cv_linear_model(total_lm_formula, data_train)
 
 
 ### AIC
-#total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
+total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 summary(total_lm_AIC)
 #save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
 load("Modelos Nico 2/total_lm_AIC.RData")
