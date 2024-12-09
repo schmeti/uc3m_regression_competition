@@ -168,14 +168,13 @@ loo_cv_linear_model <- function(model_formula,
   
 
   for (i in 1:n){
+    # split
     temp_train <- data_train[-i, ]
     temp_test <- data_train[i, , drop = FALSE]
     
     # Fit the model and make predictions
     temp_model <- fit_linear_model(model_formula, temp_train)
     temp_predictions <- predict(temp_model, newdata = temp_test)
-    
-    ## Calculate error metrics and store them
     
     # rmse
     cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$precio.house.m2)^2))
@@ -201,9 +200,11 @@ loo_cv_linear_model <- function(model_formula,
 
 
 ## Check Multicoliniearity -----------------------------------------------------
-check_multicollinearity <- function(model, data_train) {
+check_multicollinearity <- function(model, data) {
   
   # Identify numerical and categorical variables
+  predictors <- labels(terms(model)) # Variables used in the model
+  data <- data[predictors]
   num_id <- sapply(data, is.numeric)
   num_vars <- names(data)[num_id]
   cat_vars <- names(data)[!num_id]
@@ -285,11 +286,104 @@ preprocess = function(data,
   
   # Log transform of price per sqm
   data$precio.house.m2 <- log(data$precio.house.m2)
+  # data$SO2 <- log(data$SO2)
   
-  # Turn to categorical columns
-  factor_columns <- c("barrio", "distrito", "tipo.casa", "inter.exter", 
+  # radius
+  # Load required library
+  library(geosphere)
+  # Central point (Puerta del Sol)
+  center <- c(-3.7038, 40.4168)
+    
+  # Calculate distances and add a new column
+  data$radius <- distHaversine(
+    matrix(c(data$longitud, data$latitud), ncol = 2),
+    matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
+  ) / 1000  # Convert meters to kilometers
+  
+  # Turn categorical columns to factors
+  factor_columns <- c("barrio", "distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
                       "ascensor", "estado", "comercial", "casco.historico", "M.30")
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
+  
+  # group categories via manual evaluation
+  # Dorm
+  data <- data %>%
+    mutate(
+      dorm = case_when(
+        dorm %in% c("0", "1") ~ "0-1",
+        dorm %in% c("4", "5", "6", "7") ~ "+4",
+        TRUE ~ as.character(dorm)  
+      )
+    )
+  data$dorm <- factor(data$dorm, levels = unique(data$dorm))
+  
+  # Banos
+  data <- data %>%
+    mutate(
+      banos = case_when(
+        banos %in% c("3", "4", "5", "7") ~ "+3",
+        TRUE ~ as.character(banos)  
+      )
+    )
+  data$banos <- factor(data$banos, levels = unique(data$banos))
+  
+  # tipo.casa
+  data <- data %>%
+    mutate(
+      tipo.casa = case_when(
+        tipo.casa %in% c("atico", "estudio", "Otros") ~ "Atico/Estudio",
+        TRUE ~ as.character(tipo.casa)  
+      )
+    )
+  data$tipo.casa <- factor(data$tipo.casa, levels = unique(data$tipo.casa))
+  
+  # estado
+  data <- data %>%
+    mutate(
+      estado = case_when(
+        estado %in% c("a_reformar", "reg,-mal") ~ "Low_standards",
+        estado %in% c("excelente", "nuevo-semin,", "reformado") ~ "High_standards",
+        estado %in% c("buen_estado", "segunda_mano") ~ "Mid_standards",
+      )
+    )
+  data$estado <- factor(data$estado, levels = unique(data$estado))
+  
+  
+  data <- data %>%
+    mutate(
+      distrito = case_when(
+        # South Districts
+        distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
+        
+        # Central Districts
+        distrito %in% c("carabanchel", "latina") ~ "Center West",
+        
+        # North Districts
+        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "North",
+        
+        # West Districts
+        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "West",
+        
+        # Default to original values if no match
+        TRUE ~ as.character(distrito)
+      )
+    )
+  data$distrito <- factor(data$distrito, levels = unique(data$distrito))
+  
+  # Function to normalize multiple variables
+  normalize_variables <- function(variables) {
+    for (var in variables) {
+      data[[var]] <- (data[[var]] - mean(data[[var]], na.rm = TRUE)) / sd(data[[var]], na.rm = TRUE)
+    }
+    return(data)
+  }
+  
+  
+  # Generate the formula automatically
+  num_id <- sapply(data, is.numeric) 
+  num_vars <- names(data)[num_id] %>% setdiff(c("precio.house.m2", "radius"))
+  
+  data = normalize_variables(num_vars)
   
   # Eliminar columnas no deseadas
   data <- subset(data, select=predictors)
@@ -318,7 +412,7 @@ fit_ps_model = function(data_train){
   
   # Create the formula with p-splines for numerical vars. and straight categorical vars.
   gam_formula <- as.formula(
-    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', k = 40, m = 3)"),cat_vars), collapse = " + "))
+    paste("y ~", paste(c(paste0("s(", predictors, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
   )
   # Fit the GAM 
   gam_model <- gam(gam_formula, data = data_train)
@@ -407,7 +501,7 @@ run_pipeline = function(data,
   
   
   # check multicolinearity
-  multicollinearity <- check_multicollinearity(model)
+  multicollinearity <- check_multicollinearity(model, data_processed)
   cat("Check Multicolinearity -- DONE\n")
   
   

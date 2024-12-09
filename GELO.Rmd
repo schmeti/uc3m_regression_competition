@@ -1,0 +1,230 @@
+---
+title: "Untitled"
+author: "Ángel Pellitero García"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Documentation
+
+Since the training data consists of 36 variables, which will
+
+### Categorical Review
+
+Lets test if the new categorical agrupations present significative differences between them.
+
+```{r, echo=FALSE}
+source("modelling_pipeline.R")
+```
+
+```{r}
+data_processed = preprocess(data)
+
+# Function to create boxplots, perform Kruskal-Wallis test, and run post-hoc tests
+plot_price_by_categories <- function(data, cat_vars, price_var) {
+  for (var in cat_vars) {
+    # Create the boxplot
+    p <- ggplot(data, aes_string(x = var, y = price_var)) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", price_var, "by", var),
+        x = var,
+        y = price_var
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    
+    # Print the boxplot
+    print(p)
+    
+    # Perform Kruskal-Wallis test
+    test_formula <- as.formula(paste(price_var, "~", var))
+    kruskal_result <- kruskal.test(test_formula, data = data)
+    
+    # Print Kruskal-Wallis results
+    print(kruskal_result)
+    
+    # Perform post-hoc test if Kruskal-Wallis is significant
+    if (kruskal_result$p.value <= 0.05) {
+      cat("\nPost-hoc analysis using pairwise Wilcoxon tests:\n")
+      print(test_formula)
+      
+      # Perform pairwise Wilcoxon test
+      post_hoc_result <- pairwise.wilcox.test(
+        x = data[[price_var]],
+        g = data[[var]],
+        p.adjust.method = "bonferroni"  # Adjust for multiple comparisons
+      )
+      
+      # Print post-hoc results
+      print(post_hoc_result)
+    }
+  }
+}
+
+# Example usage
+cat.var <- c("estado", "tipo.casa")  # Categorical variables
+plot_price_by_categories(data_processed, cat.var, "precio.house.m2")
+
+```
+
+```{r}
+k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Set the previously studied best seed (balance-wise)
+  set.seed(416)
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+temp_test = data
+
+# Para cargar la data ir a nicos thingis 222
+i = 1
+temp_test <- data_train[which(folded_data==i),]
+summary(temp_test[,cat_vars])
+
+# Calculate proportions for each categorical variable
+proportions <- lapply(cat_vars, function(var) {
+  counts <- table(temp_test[[var]])             # Count occurrences
+  props <- counts / sum(counts)                 # Calculate proportions
+  data.frame(Count = counts, Proportion = props)  # Combine counts and proportions
+})
+
+# Assign names to the list
+names(proportions) <- cat_vars
+
+proportions[1]
+```
+
+```{r}
+# Initialize an empty list to store proportions for each fold and the global dataset
+all_proportions <- list()
+
+# Function to calculate proportions for a dataset
+calculate_proportions <- function(data, cat_vars) {
+  lapply(cat_vars, function(var) {
+    counts <- table(data[[var]])  # Count occurrences
+    props <- counts / sum(counts)  # Calculate proportions
+    data.frame(Category = names(counts), Count = as.numeric(counts), Proportion = round(props, 4))
+  })
+}
+
+# Add global proportions to the list
+all_proportions$Global <- calculate_proportions(data, cat_vars)
+
+# Add proportions for each fold to the list
+for (i in unique(folded_data)) {
+  temp_test <- data_train[which(folded_data == i), ]
+  all_proportions[[paste("Fold", i)]] <- calculate_proportions(temp_test, cat_vars)
+}
+
+# Combine proportions into a single table for each variable
+combined_tables <- lapply(cat_vars, function(var) {
+  # Extract the data for the variable from all proportions
+  tables <- lapply(all_proportions, function(prop_list) prop_list[[var]])
+  
+  # Combine the tables, aligning on the 'Category' column
+  combined <- Reduce(function(x, y) merge(x, y, by = "Category", all = TRUE), tables)
+  
+  # Rename columns for clarity
+  colnames(combined) <- c("Category", 
+                          "Global_Count", "Global_Proportion",
+                          paste0(rep(c("Fold", "Proportion"), length(unique(folded_data))), "_", rep(1:length(unique(folded_data)), each = 2)))
+  
+  # Replace NAs with zeros for missing categories
+  combined[is.na(combined)] <- 0
+  
+  return(combined)
+})
+
+# Assign names to the list of combined tables
+names(combined_tables) <- cat_vars
+
+# Example: Print the table for the first variable
+print(combined_tables[[1]])
+
+# Save all tables to a file (optional)
+# lapply(names(combined_tables), function(var) {
+#   write.csv(combined_tables[[var]], paste0(var, "_proportions.csv"), row.names = FALSE)
+# })
+
+```
+
+```{r}
+library(ggplot2)
+
+data <- read_excel("Data/data_train.xlsx")
+
+
+ggplot(data, aes(x = log(SO2))) +
+  geom_histogram(fill = "#8FBC8F", color = "black", alpha = 0.9) +
+  labs(x = "Log(precio.house.m²)",
+    y = "Frequency"
+  ) +
+  theme_bw()
+```
+
+```{r}
+library(GGally)
+
+data <- read_excel("Data/data_train.xlsx")
+data = preprocess(data)
+
+num_id <- sapply(data, is.numeric) 
+
+# Compute the correlations with "precio.house.m2"
+correlations <- sapply(data[,num_id], function(x) cor(data$precio.house.m2, x,
+                                             use = "complete.obs"))
+
+# View the correlation vector
+print(correlations)
+cor_var = which(abs(correlations) >= 0.3)[c(-1,-2)] %>% names()
+
+cor_matrix <- cor(data[, cor_var], use = "complete.obs")
+
+# Create the ggpairs plot
+custom_ggpairs <- ggpairs(
+  data[, cor_var],
+  aes(alpha = 0.7),
+  lower = list(
+    continuous = wrap("points", color = "blue4", size = 1, fill = "blue3")
+  ),
+  upper = list(
+    continuous = wrap("cor", size = 2.5, color = "darkblue")
+  ),
+  diag = list(
+    continuous = wrap("densityDiag", fill = "royalblue4", alpha = 0.5)
+  )
+) +
+  theme_classic() +
+  theme(
+    panel.background = element_rect(fill = "#F0FFFF"),
+    axis.text = element_text(size = 6, color = "gray1"),
+    strip.text = element_text(size = 7, face = "bold", color = "#2C3E50")
+  )
+
+# Display the plot
+custom_ggpairs
+
+ggsave("scatterplot_matrix.png", plot = custom_ggpairs, dpi = 300, width = 16, height = 12, units = "cm")
+
+```
