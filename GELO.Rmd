@@ -184,6 +184,8 @@ ggplot(data, aes(x = log(SO2))) +
 ```
 
 ```{r}
+library(GGally)
+
 data <- read_excel("Data/data_train.xlsx")
 data = preprocess(data)
 
@@ -195,7 +197,34 @@ correlations <- sapply(data[,num_id], function(x) cor(data$precio.house.m2, x,
 
 # View the correlation vector
 print(correlations)
-which(abs(correlations) >= 0.25)
+cor_var = which(abs(correlations) >= 0.3)[c(-1,-2)] %>% names()
 
+cor_matrix <- cor(data[, cor_var], use = "complete.obs")
+
+# Create the ggpairs plot
+custom_ggpairs <- ggpairs(
+  data[, cor_var],
+  aes(alpha = 0.7),
+  lower = list(
+    continuous = wrap("points", color = "blue4", size = 1, fill = "blue3")
+  ),
+  upper = list(
+    continuous = wrap("cor", size = 2.5, color = "darkblue")
+  ),
+  diag = list(
+    continuous = wrap("densityDiag", fill = "royalblue4", alpha = 0.5)
+  )
+) +
+  theme_classic() +
+  theme(
+    panel.background = element_rect(fill = "#F0FFFF"),
+    axis.text = element_text(size = 6, color = "gray1"),
+    strip.text = element_text(size = 7, face = "bold", color = "#2C3E50")
+  )
+
+# Display the plot
+custom_ggpairs
+
+ggsave("scatterplot_matrix.png", plot = custom_ggpairs, dpi = 300, width = 16, height = 12, units = "cm")
 
 ```
