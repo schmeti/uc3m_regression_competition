@@ -307,6 +307,7 @@ fit_linear_model = function(formula, data_train){
 }
 
 ## Fit P-Splines + categorical (GAM) Model
+library(mgcv)
 fit_ps_model = function(data_train){
   # Generate the formula automatically
   num_id <- sapply(data_train, is.numeric)
