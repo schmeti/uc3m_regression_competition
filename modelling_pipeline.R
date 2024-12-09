@@ -234,7 +234,7 @@ preprocess = function(data,
   
   # Log transform of price per sqm
   data$precio.house.m2 <- log(data$precio.house.m2)
-  data$SO2 <- log(data$SO2)
+  # data$SO2 <- log(data$SO2)
   
   # radius
   # Load required library
