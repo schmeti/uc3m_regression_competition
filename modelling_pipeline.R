@@ -304,13 +304,13 @@ preprocess = function(data,
         distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
         
         # Central Districts
-        distrito %in% c("carabanchel", "latina") ~ "Center West",
+        distrito %in% c("carabanchel", "latina") ~ "South West",
         
         # North Districts
-        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "North",
+        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "South East",
         
         # West Districts
-        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "West",
+        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "North East",
         
         # Default to original values if no match
         TRUE ~ as.character(distrito)
