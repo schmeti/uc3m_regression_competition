@@ -21,26 +21,6 @@ library(Metrics)
 if(!require(geosphere)) install.packages("geosphere")
 library(geosphere)
 
-initial_transformation <- function(data){
-  data_tr_new <- data
-  
-  # Eliminate sup.const for collinearity reasons
-  data_tr_new$sup.const <- NULL
-  
-  # Create the new variable radius
-  centro <- c(-3.6946, 40.4190)  # Longitude, Latitude of the
-  data_tr_new$radius <- distHaversine(
-    cbind(data_tr_new$longitud, data_tr_new$latitud),
-    centro
-  )
-  
-  # Logarithmic objective variable
-  data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2) 
-  data_tr_new$precio.house.m2 <- NULL # Eliminate the old variable
-  
-  return(data_tr_new)
-}
-
 # Multicollinearity Analysis
 if(!require(car)) install.packages("car")
 library(car)
@@ -284,9 +264,34 @@ diagnostic_plots <- function(model) {
 preprocess = function(data,
                       predictors){
   
-  # Log transform of price per sqm
-  data$precio.house.m2 <- log(data$precio.house.m2)
-  # data$SO2 <- log(data$SO2)
+  # Eliminate
+  data$train_indices <- NULL
+  
+  # Eliminate 
+  data$barrio <- NULL
+  
+  # Eliminate 
+  data$cod_barrio <- NULL
+  
+  # Eliminate 
+  data$cod_distrito <- NULL
+  
+  # Logarithmic objective variable
+  data$y <- log(data$precio.house.m2) 
+  data$precio.house.m2 <- NULL # Eliminate the old variable
+  
+  # Eliminate sup.const for collinearity reasons
+  data$sup.const <- NULL
+
+  # Logarithmic transform
+  data$log.sup.util <- log(data$sup.util) 
+  data$sup.util <- NULL
+  
+  # Eliminate casco.historico for duplcate information reasons
+  data$casco.historico <- NULL
+  
+  # Eliminate M.30 for duplcate information reasons
+  data$M.30 <- NULL
   
   # radius
   # Load required library
@@ -301,8 +306,8 @@ preprocess = function(data,
   ) / 1000  # Convert meters to kilometers
   
   # Turn categorical columns to factors
-  factor_columns <- c("barrio", "distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
-                      "ascensor", "estado", "comercial", "casco.historico", "M.30")
+  factor_columns <- c("distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
+                      "ascensor", "estado", "comercial")
   data[factor_columns] <- lapply(data[factor_columns], as.factor)
   
   # group categories via manual evaluation
@@ -331,7 +336,9 @@ preprocess = function(data,
   data <- data %>%
     mutate(
       tipo.casa = case_when(
-        tipo.casa %in% c("atico", "estudio", "Otros") ~ "Atico/Estudio",
+        tipo.casa %in% c("atico", "estudio") ~ "Atico/Estudio",
+        tipo.casa %in% c("piso", "Otros") ~ "Piso",
+        tipo.casa %in% c("chalet", "duplex") ~ "Chalet/Duplex",
         TRUE ~ as.character(tipo.casa)  
       )
     )
@@ -341,9 +348,9 @@ preprocess = function(data,
   data <- data %>%
     mutate(
       estado = case_when(
-        estado %in% c("a_reformar", "reg,-mal") ~ "Low_standards",
-        estado %in% c("excelente", "nuevo-semin,", "reformado") ~ "High_standards",
-        estado %in% c("buen_estado", "segunda_mano") ~ "Mid_standards",
+        estado %in% c("a_reformar", "reg,-mal") ~ "Bajo",
+        estado %in% c("excelente", "nuevo-semin,", "reformado") ~ "Alto",
+        estado %in% c("buen_estado", "segunda_mano") ~ "Medio",
       )
     )
   data$estado <- factor(data$estado, levels = unique(data$estado))
@@ -378,10 +385,9 @@ preprocess = function(data,
     return(data)
   }
   
-  
   # Generate the formula automatically
   num_id <- sapply(data, is.numeric) 
-  num_vars <- names(data)[num_id] %>% setdiff(c("precio.house.m2", "radius"))
+  num_vars <- names(data)[num_id] %>% setdiff(c("y", "radius"))
   
   data = normalize_variables(num_vars)
   
@@ -565,15 +571,28 @@ predictors_selected = c("longitud",
 )
 
 
-run_pipeline(data,
-             model_formula = precio.house.m2 ~ .,
-             store_model = F,
-             predictors = predictors_selected
-             #load_model_path = "models/linear_model_2024-11-25.rds"
-             )
+# run_pipeline(data,
+#              model_formula = precio.house.m2 ~ .,
+#              store_model = F,
+#              predictors = predictors_selected
+#              #load_model_path = "models/linear_model_2024-11-25.rds"
+#              )
 
 
+library(leaps)
 
+data <- read_excel("Data/data_train.xlsx")
+
+loaded_objects <- load("Modelos Nico/total_lm_AIC.RData")
+model <- get(loaded_objects[1])
+
+selected_predictors <- labels(terms(model))
+reduced_formula <- as.formula(paste("precio.house.m2 ~", paste(selected_predictors, collapse = " + ")))
+
+#data_split = train_test_split(data)
+data_preprocessed = preprocess(data)
+
+regsubsets_model <- regsubsets(reduced_formula, data = data_preprocessed, nvmax = length(selected_predictors), really.big = TRUE)
 
 
 
