@@ -204,14 +204,6 @@ for (i in 1:2000){
   }
 }
 print(seed) # Up until 2000 ---> 248 is the best (k=4)
-for (j in 1:k){
-  print(paste(j, "- Fold   ==================================================="))
-  for(var in cat_vars){
-    print(paste(var,"----------------------------------------------------------"))
-    print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
-    print(Tot_table[[as.name(var)]])
-  }
-}
 
 k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   # Set the previously studied best seed (balance-wise)
@@ -230,6 +222,16 @@ k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   # Return the new dataset
   return(folded_data)
 }
+folded_data <- k_fold(data_train)
+for (j in 1:k){
+  print(paste(j, "- Fold   ==================================================="))
+  for(var in cat_vars){
+    print(paste(var,"----------------------------------------------------------"))
+    print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
+    print(Tot_table[[as.name(var)]])
+  }
+}
+
 
 ### Linear Models CV -----------------------------------------------------------
 
@@ -301,15 +303,17 @@ lm_formula <- as.formula(
 )
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
+k_fold_cv_linear_model(lm_formula, data_train)
 
 ## Step BIC
 n <- 736
 lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
 summary(lm_BIC)
 BIC_predictors <- labels(terms(lm_BIC))
-total_lm_formula <- as.formula(
-  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", "*", "(", paste(cat_vars, collapse = " + "), ")" )
+lm_BIC_formula <- as.formula(
+  paste("y ~", paste(BIC_predictors, collapse = " + "))
 )
+k_fold_cv_linear_model(lm_formula, data_train)
 
 
 ### Modeling: Interactions -----------------------------------------------------
@@ -399,6 +403,12 @@ summary(added_model)
 # Perform BIC again
 added_BIC_model <- stepAIC(added_model, direction = 'both', k = log(n))
 summary(added_BIC_model)
+added_BIC_predictors <- labels(terms(added_BIC_model))
+added_BIC_predictors
+added_formula <- as.formula(
+  paste("y ~", paste(added_BIC_predictors, collapse = " + "))
+)
+
 k_fold_cv_linear_model(added_formula, data_train) # Worse
 
 ### New vars after BIC

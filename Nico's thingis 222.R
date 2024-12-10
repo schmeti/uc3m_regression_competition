@@ -399,10 +399,13 @@ k_fold_cv_linear_model(total_lm_formula, data_train)
 ### AIC
 total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 summary(total_lm_AIC)
-#save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
+save(total_lm_AIC, file = "Modelos Nico 2/total_lm_AIC.RData")
 load("Modelos Nico 2/total_lm_AIC.RData")
 total_AIC_predictors <- labels(terms(total_lm_AIC))
-total_AIC_interactions = total_AIC_predictors[34:length(total_AIC_predictors)]
+total_lm_AIC_formula <- as.formula(
+  paste("y ~", paste(total_AIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_lm_AIC_formula, data_train)
 
 
 # Create plots for each interaction
