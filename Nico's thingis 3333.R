@@ -328,14 +328,18 @@ k_fold_cv_linear_model(total_lm_formula, data_train) # Errores de multicolineari
 ## Step BIC
 n <- 736
 #total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
+#save(total_lm_BIC, file = "Modelos Nico 3/total_lm_BIC.RData")
 load("Modelos Nico 3/total_lm_BIC.RData")
 summary(total_lm_BIC)
-#save(total_lm_BIC, file = "Modelos Nico 3/total_lm_BIC.RData")
 total_BIC_predictors <- labels(terms(total_lm_BIC))
 total_BIC_formula <- as.formula(
   paste("y ~", paste(total_BIC_predictors, collapse = " + "))
 )
 k_fold_cv_linear_model(total_BIC_formula, data_train)
+
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(total_lm_BIC)
 
 
 total_BIC_interactions <- total_BIC_predictors[16:length(total_BIC_predictors)]
@@ -362,7 +366,7 @@ manual_BIC_formula <- as.formula(
 )
 manual_BIC_model <- lm(manual_BIC_formula, data = data_train)
 summary(manual_BIC_model)
-# We disregard PoblJubilada_div_Poblac.Total, PM10
+# We disregard PoblJubilada_div_Poblac.Total, PM10 -----------------------------
 manual_BIC_predictors <- setdiff(labels(terms(manual_BIC_model)), c("PoblJubilada_div_Poblac.Total", "PM10"))
 manual_BIC_formula <- as.formula(
   paste("y ~", paste(manual_BIC_predictors, collapse = " + "))
@@ -370,10 +374,15 @@ manual_BIC_formula <- as.formula(
 manual_BIC_model <- lm(manual_BIC_formula, data = data_train)
 summary(manual_BIC_model)
 k_fold_cv_linear_model(manual_BIC_formula, data_train)
+# save(manual_BIC_model, file = "Modelos Nico 3/manual_BIC_model.RData")
+
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(manual_BIC_model)
 ### This is the sparser model yet
 
 
-# Identify the variables included in teh BIC model without interactions and the manual one
+# Identify the variables included in the BIC model without interactions and the manual one
 not_included <- setdiff(BIC_predictors, manual_BIC_predictors)
 not_included
 
@@ -391,33 +400,59 @@ combinations1 <- expand.grid(not_included_num, cat_BIC_predictors)
 inter_new1 <- paste(combinations1$Var1, combinations1$Var2, sep = ":")
 combinations2 <- expand.grid(num_BIC_predictors, not_included_cat)
 inter_new2 <- paste(combinations2$Var1, combinations2$Var2, sep = ":")
+combinations3 <- expand.grid(not_included_num, not_included_cat)
+inter_new3 <- paste(combinations3$Var1, combinations3$Var2, sep = ":")
 
-added_terms <- c(not_included, inter_new1, inter_new2)
+added_terms <- c(not_included, inter_new1, inter_new2, inter_new3)
 
 added_formula <- as.formula(
-  paste("y ~", paste(c(manual_BIC_predictors, added_terms), collapse = " + "))
+  paste("y ~", paste(c(manual_BIC_predictors[1:13], added_terms[1:3], manual_BIC_predictors[-c(1:13)], added_terms[-c(1:3)]), collapse = " + "))
 )
 added_model <- lm (added_formula, data_train)
 summary(added_model)
 
 # Perform BIC again
+n <- 736
 added_BIC_model <- stepAIC(added_model, direction = 'both', k = log(n))
 summary(added_BIC_model)
 added_BIC_predictors <- labels(terms(added_BIC_model))
 added_BIC_predictors
-added_formula <- as.formula(
+
+added_BIC_formula <- as.formula(
   paste("y ~", paste(added_BIC_predictors, collapse = " + "))
 )
 
-k_fold_cv_linear_model(added_formula, data_train) # Worse
+k_fold_cv_linear_model(added_BIC_formula, data_train) # Worse
 
-### New vars after BIC
+### New vars after BIC ---------------------------------------------------------
 new_vars <- setdiff(labels(terms(added_BIC_model)), labels(terms(manual_BIC_model)))
 new_vars
 
+new_manual_BIC_predictors <- c(manual_BIC_predictors, new_vars)
 new_manual_BIC_formula <- as.formula(
-  paste("y ~", paste(c(manual_BIC_predictors, new_vars), collapse = " + "))
+  paste("y ~", paste(new_manual_BIC_predictors, collapse = " + "))
 )
 new_manual_BIC_model <- lm(new_manual_BIC_formula, data = data_train)
 summary(new_manual_BIC_model)
 k_fold_cv_linear_model(new_manual_BIC_formula, data_train)
+#save(new_manual_BIC_model, file = "Modelos Nico 3/new_manual_BIC_model.RData")
+
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(new_manual_BIC_model)
+
+
+### New idea: StepAIC + Manual selection ---------------------------------------
+total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
+# save(total_lm_AIC, file = "Modelos Nico 3/total_lm_AIC.RData")
+load("Modelos Nico 3/total_lm_BIC.RData")
+summary(total_lm_AIC)
+total_AIC_predictors <- labels(terms(total_lm_AIC))
+total_AIC_formula <- as.formula(
+  paste("y ~", paste(total_AIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_AIC_formula, data_train)
+
+anova(total_lm_AIC)
+
+
