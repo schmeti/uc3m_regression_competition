@@ -332,7 +332,7 @@ preprocess = function(data){
   data <- data %>%
     mutate(
       banos = case_when(
-        banos %in% c("3", "4", "5", "6", "7") ~ "3+",
+        banos %in% c("3", "4", "5", "6", "7") ~ "+3",
         TRUE ~ as.character(banos)  
       )
     )
@@ -492,15 +492,15 @@ plot_res <- function(model, data_test) {
 
 
 # predict using model and write to excel ---------------------------------------
-predict_and_write = function(data_test, model, predict_to = "Data/predicted_prices.xlsx"){
+predict_and_write = function(data_test, model, path = "Data/predicted_prices.xlsx"){
   
   # predict
   prediction = predict(model, data_test[order(data_test$test_indices), ])
   
   # write predictions to excel
-  wb <- loadWorkbook(predict_to)
+  wb <- loadWorkbook(path)
   writeData(wb, sheet = "Hoja1", x = prediction, startCol = 2, startRow = 2)
-  saveWorkbook(wb, predict_to, overwrite = TRUE)
+  saveWorkbook(wb, path, overwrite = TRUE)
 }
 
 
@@ -512,7 +512,8 @@ run_pipeline = function(data_train,
                         model_formular="",
                         store_model = FALSE,
                         store_model_name = "linear_model",
-                        load_model_path = ""){
+                        load_model_path = "",
+                        predict_and_write_path = ""){
   
   
   # preprocess data
@@ -550,9 +551,10 @@ run_pipeline = function(data_train,
   cat("Plot -- DONE\n")
   
   # predict
-  predict_and_write(data_test_processed, model)
-  cat("Writing Predictions to excel -- DONE\n")
-  
+  if (!is.null(predict_and_write_path) && predict_and_write_path != "") {
+    predict_and_write(data_test_processed, model,path=predict_and_write_path)
+    cat("Writing Predictions to excel -- DONE\n")
+  }
   
   
   # save model
@@ -575,7 +577,12 @@ data_test <- read_excel("Data/data_test_tryout.xlsx")
 
 run_pipeline(data_train=data_train,
              data_test=data_test,
-             load_model_path="Modelos Nico 2/total_lm_BIC.RData",
-#             model_formula = y ~ .,
+             load_model_path="Modelos Nico 3/total_lm_BIC.RData",
              store_model = FALSE,
+             predict_and_write_path = "Data/predicted_prices.xlsx",
+             #model_formula = y ~ .,
              )
+
+
+
+
