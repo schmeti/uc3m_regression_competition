@@ -148,7 +148,144 @@ preprocess = function(data,
   return(data)
 }
 
+# Preprocess the data
 data_train <- preprocess(data)
+
+### K-fold CV ------------------------------------------------------------------
+k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+#### WARNING --- IN PROGRESS
+### Loop to find a comprehensively balanced seed for the k-fold
+seed <- 1 
+mix <- 1000000
+k = 4
+Tot_table <- list()
+n <- 736
+
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], "y")
+cat_vars <- names(data_train)[!num_id]
+
+for (var in cat_vars){
+  Tot_table[[as.name(var)]] = table(data_train[[as.name(var)]])/n
+}
+for (i in 1:2000){
+  set.seed(i)
+  folded_data <- fold(data_train, 
+                      k = k, 
+                      cat_col = "tipo.casa",
+                      num_col = "y")
+  mix_aux <- 0
+  for (j in 1:k){
+    temp_indexes <- which(folded_data$.folds == j)
+    ll <- length(temp_indexes)
+    for(var in cat_vars){
+      mix_aux= mix_aux + sum(abs(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll - Tot_table[[as.name(var)]]))
+    }
+  }
+  print(i)
+  print(mix_aux)
+  if (mix_aux < mix){
+    seed <- i
+    mix <- mix_aux
+  }
+}
+print(seed) # Up until 2000 ---> 248 is the best (k=4)
+for (j in 1:k){
+  print(paste(j, "- Fold   ==================================================="))
+  for(var in cat_vars){
+    print(paste(var,"----------------------------------------------------------"))
+    print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
+    print(Tot_table[[as.name(var)]])
+  }
+}
+
+k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Set the previously studied best seed (balance-wise)
+  set.seed(248)
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+### Linear Models CV -----------------------------------------------------------
+
+fit_linear_model = function(formula, data_train){
+  model = lm(formula,data = data_train)
+  return(model)
+}
+
+k_fold_cv_linear_model <- function(model_formula, 
+                                   data_train,
+                                   k=4){
+  cat("=== Running k_fold Cross Validation --- lm === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_linear_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # RsqAdj in log(y)
+    n_test = nrow(temp_test)
+    num_predictors = length(coefficients(temp_model)) 
+    
+    SSE = sum((temp_test$y - temp_predictions)^2)
+    SST = sum((mean(temp_test$y) - temp_test$y)^2)
+    
+    cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # RMSE in the original variable
+    SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    cv_rmse[i] <- sqrt(SSE_exp/n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse=cv_rmse,
+              mean_cv_rmse = mean(cv_rmse),
+              cv_rsq_adj=cv_rsq_adj,
+              mean_cv_rsq_adj = mean(cv_rsq_adj)
+  ))
+}
+
+
 
 
 #### Modelling: No interactions ------------------------------------------------
@@ -169,12 +306,10 @@ summary(lm_model)
 n <- 736
 lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
 summary(lm_BIC)
-
-## Step AIC
-lm_AIC <- stepAIC(lm_model, direction = 'both')
-summary(lm_AIC)
-
-
+BIC_predictors <- labels(terms(lm_BIC))
+total_lm_formula <- as.formula(
+  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", "*", "(", paste(cat_vars, collapse = " + "), ")" )
+)
 
 
 ### Modeling: Interactions -----------------------------------------------------
@@ -184,6 +319,7 @@ total_lm_formula <- as.formula(
 )
 total_lm_model = lm(total_lm_formula,data = data_train)
 summary(total_lm_model)
+k_fold_cv_linear_model(total_lm_formula, data_train) # Errores de multicolinearidad
 
 ## Step BIC
 n <- 736
@@ -191,9 +327,13 @@ n <- 736
 load("Modelos Nico 3/total_lm_BIC.RData")
 summary(total_lm_BIC)
 #save(total_lm_BIC, file = "Modelos Nico 3/total_lm_BIC.RData")
-
-
 total_BIC_predictors <- labels(terms(total_lm_BIC))
+total_BIC_formula <- as.formula(
+  paste("y ~", paste(total_BIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_BIC_formula, data_train)
+
+
 total_BIC_interactions <- total_BIC_predictors[16:length(total_BIC_predictors)]
 
 
@@ -225,4 +365,49 @@ manual_BIC_formula <- as.formula(
 )
 manual_BIC_model <- lm(manual_BIC_formula, data = data_train)
 summary(manual_BIC_model)
+k_fold_cv_linear_model(manual_BIC_formula, data_train)
+### This is the sparser model yet
 
+
+# Identify the variables included in teh BIC model without interactions and the manual one
+not_included <- setdiff(BIC_predictors, manual_BIC_predictors)
+not_included
+
+# Add them (and interactions) to the manual model and perform BIC again
+manual_BIC_predictors
+num_BIC_predictors <- manual_BIC_predictors[1:8]
+cat_BIC_predictors <- manual_BIC_predictors[9:13]
+inter_BIC_predictors <- manual_BIC_predictors[14:16]
+
+# Get all the interactions to be added
+not_included_num <- not_included[c(1,2)]
+not_included_cat <- not_included[3]
+
+combinations1 <- expand.grid(not_included_num, cat_BIC_predictors)
+inter_new1 <- paste(combinations1$Var1, combinations1$Var2, sep = ":")
+combinations2 <- expand.grid(num_BIC_predictors, not_included_cat)
+inter_new2 <- paste(combinations2$Var1, combinations2$Var2, sep = ":")
+
+added_terms <- c(not_included, inter_new1, inter_new2)
+
+added_formula <- as.formula(
+  paste("y ~", paste(c(manual_BIC_predictors, added_terms), collapse = " + "))
+)
+added_model <- lm (added_formula, data_train)
+summary(added_model)
+
+# Perform BIC again
+added_BIC_model <- stepAIC(added_model, direction = 'both', k = log(n))
+summary(added_BIC_model)
+k_fold_cv_linear_model(added_formula, data_train) # Worse
+
+### New vars after BIC
+new_vars <- setdiff(labels(terms(added_BIC_model)), labels(terms(manual_BIC_model)))
+new_vars
+
+new_manual_BIC_formula <- as.formula(
+  paste("y ~", paste(c(manual_BIC_predictors, new_vars), collapse = " + "))
+)
+new_manual_BIC_model <- lm(new_manual_BIC_formula, data = data_train)
+summary(new_manual_BIC_model)
+k_fold_cv_linear_model(new_manual_BIC_formula, data_train)
