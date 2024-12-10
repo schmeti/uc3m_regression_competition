@@ -1,0 +1,82 @@
+---
+title: "investigate_data_test"
+output: html_document
+date: "2024-12-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+data_train <- read_excel("Data/data_train.xlsx")
+data_test <- read_excel("Data/data_test_tryout.xlsx")
+
+```
+
+
+```{r}
+summary(data_train)
+
+```
+
+```{r}
+compare_datasets <- function(train, test) {
+  # Initialize result dataframes
+  categorical_issues <- data.frame(
+    column = character(),
+    new_category = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  numerical_issues <- data.frame(
+    column = character(),
+    value = numeric(),
+    distance = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Iterate over each column in train
+  for (col_name in colnames(train)) {
+    if (is.factor(train[[col_name]]) || is.character(train[[col_name]])) {
+      # Check for categorical variables
+      train_categories <- unique(train[[col_name]])
+      test_categories <- unique(test[[col_name]])
+      new_categories <- setdiff(test_categories, train_categories)
+      if (length(new_categories) > 0) {
+        categorical_issues <- rbind(
+          categorical_issues,
+          data.frame(column = col_name, new_category = new_categories)
+        )
+      }
+    } else if (is.numeric(train[[col_name]])) {
+      # Check for numerical variables
+      train_min <- min(train[[col_name]], na.rm = TRUE)
+      train_max <- max(train[[col_name]], na.rm = TRUE)
+      test_values <- test[[col_name]]
+      
+      outside_range <- test_values[test_values < train_min | test_values > train_max]
+      if (length(outside_range) > 0) {
+        distances <- ifelse(outside_range < train_min,
+                            train_min - outside_range,
+                            outside_range - train_max)
+        numerical_issues <- rbind(
+          numerical_issues,
+          data.frame(column = col_name, value = outside_range, distance = distances)
+        )
+      }
+    }
+  }
+  
+  # Combine and return results
+  list(
+    categorical_issues = categorical_issues,
+    numerical_issues = numerical_issues
+  )
+}
+
+compare_datasets(data_train, data_test)
+
+```
+

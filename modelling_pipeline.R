@@ -6,6 +6,8 @@ if (!require(groupdata2)) install.packages("groupdata2")
 if (!require(car)) install.packages("car")
 if (!require(dplyr)) install.packages("dplyr")
 if (!require(Metrics)) install.packages("Metrics")
+if (!require(openxlsx)) install.packages("openxlsx")
+
 
 
 library(readxl)
@@ -15,6 +17,8 @@ library(groupdata2)
 library(car)
 library(dplyr)
 library(Metrics)
+library(openxlsx)
+
 
 
 # Initial Transformations of the data ------------------------------------------
@@ -141,7 +145,7 @@ k_fold_cv_linear_model <- function(model_formula,
 ## Leave one out - cross-validation ------------------------------------------------------
 loo_cv_linear_model <- function(model_formula, 
                                    data_train){
-  cat("=== running Leave one Out Cross Validation ===")
+  cat("=== running Leave one Out Cross Validation ===\n")
   n <- nrow(data_train)
   cv_rmse <- numeric(n)
   cv_rsq_adj <- numeric(n)
@@ -154,17 +158,19 @@ loo_cv_linear_model <- function(model_formula,
     
     # Fit the model and make predictions
     temp_model <- fit_linear_model(model_formula, temp_train)
-    temp_predictions <- predict(temp_model, newdata = temp_test)
+    temp_predictions <- exp(predict(temp_model, newdata = temp_test))
+    
+    y = exp(temp_test$y)
     
     # rmse
-    cv_rmse[i] <- sqrt(mean((temp_predictions - temp_test$precio.house.m2)^2))
+    cv_rmse[i] <- sqrt(mean((temp_predictions - y)^2))
     
     # rsq adj
     n_train = nrow(temp_train)
     num_predictors = ncol(temp_train)-1
     
-    SSE = sum((temp_test$precio.house.m2 - temp_predictions )^2)
-    SSR = sum((mean(temp_test$precio.house.m2) - temp_predictions)^2)
+    SSE = sum((y - temp_predictions )^2)
+    SSR = sum((mean(y) - temp_predictions)^2)
     SST = SSE + SSE
     
     cv_rsq_adj[i] = 1 - (((SSE/(SSE+SSR))*(n_train-1))/(n_train-num_predictors-1))
@@ -174,9 +180,6 @@ loo_cv_linear_model <- function(model_formula,
   return(list(cv_rmse=cv_rmse,
               cv_rsq_adj=cv_rsq_adj))
 }
-
-
-
 
 
 ## Check Multicoliniearity -----------------------------------------------------
@@ -261,8 +264,7 @@ diagnostic_plots <- function(model) {
 ### Pipeline Components
 
 ## Preprocess  -----------------------------------------------------------------
-preprocess = function(data,
-                      predictors){
+preprocess = function(data){
   
   # Eliminate
   data$train_indices <- NULL
@@ -277,9 +279,13 @@ preprocess = function(data,
   data$cod_distrito <- NULL
   
   # Logarithmic objective variable
-  data$y <- log(data$precio.house.m2) 
-  data$precio.house.m2 <- NULL # Eliminate the old variable
+  if ("precio.house.m2" %in% colnames(data)) {
+    data$y <- log(data$precio.house.m2) 
+    data$precio.house.m2 <- NULL # Eliminate the old variable
+  }
   
+  
+
   # Eliminate sup.const for collinearity reasons
   data$sup.const <- NULL
 
@@ -326,7 +332,7 @@ preprocess = function(data,
   data <- data %>%
     mutate(
       banos = case_when(
-        banos %in% c("3", "4", "5", "7") ~ "+3",
+        banos %in% c("3", "4", "5", "6", "7") ~ "3+",
         TRUE ~ as.character(banos)  
       )
     )
@@ -391,9 +397,6 @@ preprocess = function(data,
   
   data = normalize_variables(num_vars)
   
-  # Eliminar columnas no deseadas
-  data <- subset(data, select=predictors)
-  
   return(data)
 }
 
@@ -427,6 +430,14 @@ fit_ps_model = function(data_train){
   return(gam_model)
 }
 
+# load model
+load_model = function(load_model_path){
+  temp_env <- new.env()
+  load(load_model_path, envir = temp_env)
+  obj_name <- ls(temp_env)
+  model <- temp_env[[obj_name[1]]]
+  return(model)
+}
 
 # Score   ----------------------------------------------------------
 score_model = function(model,
@@ -455,7 +466,7 @@ score_model = function(model,
 plot_res <- function(model, data_test) {
   # Calculate fitted values and residuals
   predictions <- predict(model, newdata = data_test)
-  residuals <- data_test$precio.house.m2 - predictions
+  residuals <- data_test$y - predictions
   
   # Create a data frame for plotting
   plot_data <- data.frame(
@@ -480,46 +491,67 @@ plot_res <- function(model, data_test) {
 
 
 
+# predict using model and write to excel ---------------------------------------
+predict_and_write = function(data_test, model, predict_to = "Data/predicted_prices.xlsx"){
+  
+  # predict
+  prediction = predict(model, data_test[order(data_test$test_indices), ])
+  
+  # write predictions to excel
+  wb <- loadWorkbook(predict_to)
+  writeData(wb, sheet = "Hoja1", x = prediction, startCol = 2, startRow = 2)
+  saveWorkbook(wb, predict_to, overwrite = TRUE)
+}
+
+
+################################################################################
+
 ### Run Pipeline
-run_pipeline = function(data,
-                        model_formular,
-                        predictors,
+run_pipeline = function(data_train,
+                        data_test,
+                        model_formular="",
                         store_model = FALSE,
                         store_model_name = "linear_model",
                         load_model_path = ""){
   
+  
   # preprocess data
-  data_processed = preprocess(data = data, predictors)
+  data_train_processed = preprocess(data = data_train)
+  data_test_processed = preprocess(data = data_test)
   cat("Preprocessing -- DONE\n")
+  
   
   # fit/load model
   load_model_path <- trimws(load_model_path)
   if (!is.null(load_model_path) && load_model_path != "") {
-    model = readRDS(load_model_path)
-    print(paste(" === Model: ",load_model_path, " loaded successfully ===\n"))
+    model = load_model(load_model_path)
+    model_formular = formula(model)
+    cat(paste(" Load Model ",load_model_path, " -- DONE\n"))
   } else {
-    cat("=== Fitting a new model ===\n")
-    model = fit_linear_model(formula = model_formular, data_train = data_processed)
+    model = fit_linear_model(formula = model_formular, data_train = data_train_processed)
+    cat("Fit Model -- DONE\n")
+    
   }
-  cat("Load/Fit Model -- DONE\n")
   print(summary(model))
   
-  
-  
   # check multicolinearity
-  multicollinearity <- check_multicollinearity(model, data_processed)
-  cat("Check Multicolinearity -- DONE\n")
+  #multicollinearity <- check_multicollinearity(model, data_train_processed)
+  #cat("Check Multicolinearity -- DONE\n")
   
   
   # predict and score on test data set
   score = score_model(model = model,
-                      data = data_processed,
+                      data = data_train_processed,
                       model_formula=model_formular)
   cat("Scoring -- DONE\n")
   
   # diagnostics plots
   diagnostic_plots(model)
   cat("Plot -- DONE\n")
+  
+  # predict
+  predict_and_write(data_test_processed, model)
+  cat("Writing Predictions to excel -- DONE\n")
   
   
   
@@ -535,67 +567,15 @@ run_pipeline = function(data,
   }
 }
 
-# execute
-data <- read_excel("Data/data_train.xlsx")
+################################################################################
 
+### run
+data_train <- read_excel("Data/data_train.xlsx")
+data_test <- read_excel("Data/data_test_tryout.xlsx")
 
-predictors_selected = c("longitud",
-                        "latitud",
-                        #"ref.hip.zona",
-                        "precio.house.m2",
-                        "sup.const", # area
-                        #"sup.util",
-                        "dorm", # flat characteristics
-                        "banos",
-                        "inter.exter",
-                        "ascensor",
-                        "estado"
-                        #"antig",
-                        #"comercial",
-                        #"Ruidos_ext", # area charcteristics
-                        #"Mal_olor",
-                        #"Poca_limp",
-                        #"Malas_comunic",
-                        #"Pocas_zonas",
-                        #"Delincuencia",
-                        #"M.30", # Air Quality
-                        #"CO",
-                        #"NO2",
-                        #"Nox",
-                        #"O3",
-                        #"SO2",
-                        #"PM10",
-                        #"Pobl.0_14_div_Poblac.Total", # population in district
-                        #"PoblJubilada_div_Poblac.Total"
-                        #"Inmigrantes.porc"
-)
-
-
-# run_pipeline(data,
-#              model_formula = precio.house.m2 ~ .,
-#              store_model = F,
-#              predictors = predictors_selected
-#              #load_model_path = "models/linear_model_2024-11-25.rds"
-#              )
-
-
-library(leaps)
-
-data <- read_excel("Data/data_train.xlsx")
-
-loaded_objects <- load("Modelos Nico/total_lm_AIC.RData")
-model <- get(loaded_objects[1])
-
-selected_predictors <- labels(terms(model))
-reduced_formula <- as.formula(paste("precio.house.m2 ~", paste(selected_predictors, collapse = " + ")))
-
-#data_split = train_test_split(data)
-data_preprocessed = preprocess(data)
-
-regsubsets_model <- regsubsets(reduced_formula, data = data_preprocessed, nvmax = length(selected_predictors), really.big = TRUE)
-
-
-
-############### OJO
-#The numerical variables selected via teh BIC are
-# num_vars <- c("ref.hip.zona", "antig", "Poca_limp", "PM10", "Pobl.0_14_div_Poblac.Total" ,   "PoblJubilada_div_Poblac.Total", "Inmigrantes.porc", "Pocas_zonas")
+run_pipeline(data_train=data_train,
+             data_test=data_test,
+             load_model_path="Modelos Nico 2/total_lm_BIC.RData",
+#             model_formula = y ~ .,
+             store_model = FALSE,
+             )
