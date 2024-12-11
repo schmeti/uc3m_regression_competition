@@ -128,25 +128,12 @@ preprocess = function(data,
     )
   data$distrito <- factor(data$distrito, levels = unique(data$distrito))
   
-  # gases
-  n <- 736
-  pollutants <- c("CO", "NO2", "Nox", "O3", "SO2", "PM10")
-  l <- length(pollutants)
-  polluted <- matrix(0, nrow = n, ncol = l)
-  for (i in 1:l){
-    var = pollutants[i]
-    threshold = quantile(data[[var]], 0.75)
-    polluted[,i] = (data[[var]] > threshold)
-    if (var != "SO2"){
-      data[[var]] <- NULL
-    }
+  # Unifying the numeric gases variables into a single dichotomic 'polluted'
+  # which is to be SO2 (PM10 behaves strangely)
+  pollutants <- c("CO", "NO2", "Nox", "O3", "PM10")
+  for (var in pollutants){
+    data[[var]] <- NULL                     
   }
-  polluted_indivs <- apply(polluted, 1, sum)
-  data$polluted = factor(
-  cut(as.numeric(polluted_indivs), 
-      breaks = c(-Inf, 0, 2, Inf), 
-      labels = c("0", "1-2", "3+"))
-)
   
   # Function to normalize multiple variables
   normalize_variables <- function(variables) {
@@ -188,7 +175,7 @@ k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
 }
 
 ### Loop to find a comprehensively balanced seed for the k-fold
-# seed <- 1 
+# seed <- 1
 # mix <- 1000000
 # k = 4
 # Tot_table <- list()
@@ -203,8 +190,8 @@ k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
 # }
 # for (i in 1:1000){
 #   set.seed(i)
-#   folded_data <- fold(data_train, 
-#                       k = k, 
+#   folded_data <- fold(data_train,
+#                       k = k,
 #                       cat_col = "tipo.casa",
 #                       num_col = "y")
 #   mix_aux <- 0
@@ -222,11 +209,11 @@ k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
 #     mix <- mix_aux
 #   }
 # }
-# print(seed) # Up until 2000 ---> 560 is the best (k=4)
+# print(seed) # Up until 2000 ---> 248 is the best (k=4)
 
 k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   # Set the previously studied best seed (balance-wise)
-  set.seed(560)
+  set.seed(248)
   
   # Create a k-fold partition with balanced cat_vars and which
   # tries to minimize similar values in obj_var
@@ -255,7 +242,6 @@ folded_data <- k_fold(data_train)
 
 
 ### Linear Models CV -----------------------------------------------------------
-
 fit_linear_model = function(formula, data_train){
   model = lm(formula,data = data_train)
   return(model)
@@ -308,6 +294,68 @@ k_fold_cv_linear_model <- function(model_formula,
   ))
 }
 
+## Check Multicoliniearity -----------------------------------------------------
+check_multicollinearity <- function(model, data) {
+  
+  # Identify numerical and categorical variables
+  predictors <- labels(terms(model)) # Variables used in the model
+  predictors <- predictors[!grepl(":", predictors)] # Exclude interaction terms
+  data <- data[,c("y", predictors)]
+  num_id <- sapply(data, is.numeric)
+  num_vars <- setdiff(names(data)[num_id], "y")
+  cat_vars <- names(data)[!num_id]
+  
+  new_model_formula <- as.formula(
+    paste("y ~", paste(predictors, collapse = " + "))
+  )
+  new_model = lm(new_model_formula,data = data)
+  
+  # Model Matrix
+  X <- data[,num_vars]
+  R <- cor(X)
+  
+  # Calculate condition number using kappa
+  condition_number <- kappa(R, exact = TRUE)
+  
+  # Calculating VIF values using the car package
+  vif_values <- tryCatch({
+    vif(new_model)
+  }, error = function(e) {
+    warning("Could not calculate VIF due to collinearity issues.")
+    return(NA)
+  })
+  
+  # Generate warnings if there are significant problems
+  if (condition_number > 30) {
+    warning("High condition number detected, indicating potential multicollinearity issues.")
+  }
+  if (any(vif_values > 10, na.rm = TRUE)) {
+    warning("VIF values greater than 10 detected, indicating potential multicollinearity issues.")
+  }
+  
+  # Give out diagnostics 
+  cat("=== Multicollinearity Diagnostics ===\n")
+  if (is.na(condition_number)) {
+    cat("Serious issues detected in the condition number.\n")
+  } else {
+    cat("Condition Number:", round(condition_number, 2), "\n")
+  }
+  
+  cat("VIF Values:\n")
+  if (all(is.na(vif_values))) {
+    cat("VIF values could not be calculated due to collinearity.\n")
+  } else {
+    print(vif_values)
+  }
+  
+  # Return results
+  return(list(
+    condition_number = condition_number,
+    vif_values = vif_values
+  ))
+}
+
+
 #### Modelling: No interactions ------------------------------------------------
 ## Base
 num_id <- sapply(data_train, is.numeric)
@@ -322,6 +370,7 @@ lm_formula <- as.formula(
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
 k_fold_cv_linear_model(lm_formula, data_train)
+check_multicollinearity(lm_model, data_train)
 
 ## Step BIC
 n <- 736
@@ -332,7 +381,7 @@ lm_BIC_formula <- as.formula(
   paste("y ~", paste(BIC_predictors, collapse = " + "))
 )
 k_fold_cv_linear_model(lm_BIC_formula, data_train)
-
+check_multicollinearity(lm_BIC, data_train)
 
 ### Modeling: Interactions -----------------------------------------------------
 ## Base
@@ -342,19 +391,55 @@ total_lm_formula <- as.formula(
 total_lm_model = lm(total_lm_formula,data = data_train)
 summary(total_lm_model)
 k_fold_cv_linear_model(total_lm_formula, data_train)
+check_multicollinearity(total_lm_model, data_train)
 
 ## Step BIC
 n <- 736
-#total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
-#save(total_lm_BIC, file = "Modelos Nico 4/total_lm_BIC.RData")
+# total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
+# save(total_lm_BIC, file = "Modelos Nico 4/total_lm_BIC.RData")
 load("Modelos Nico 4/total_lm_BIC.RData")
 summary(total_lm_BIC)
 total_BIC_predictors <- labels(terms(total_lm_BIC))
+total_BIC_interactions <- total_BIC_predictors[14:16]
 total_BIC_formula <- as.formula(
   paste("y ~", paste(total_BIC_predictors, collapse = " + "))
 )
 k_fold_cv_linear_model(total_BIC_formula, data_train)
-
+check_multicollinearity(total_lm_BIC, data_train)
 # Diagnostics
-par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+par(mfrow = c(2, 2))
 plot(total_lm_BIC)
+
+anova(total_lm_BIC)
+
+# Create plots for each interaction
+plots <- lapply(total_BIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "y") +
+    theme_minimal()
+})
+m=1
+plots[[m]];m=m+1;
+
+
+manual_BIC_predictors <- setdiff(labels(terms(total_lm_BIC)), c("Poca_limp", "radius", "Pobl.0_14_div_Poblac.Total:comercial"))
+manual_BIC_formula <- as.formula(
+  paste("y ~", paste(manual_BIC_predictors, collapse = " + "))
+)
+manual_BIC_model = lm(manual_BIC_formula,data = data_train)
+summary(manual_BIC_model)
+k_fold_cv_linear_model(manual_BIC_formula, data_train)
+check_multicollinearity(manual_BIC_model, data_train)
+
+anova(manual_BIC_model)
+
+
+
+
+
