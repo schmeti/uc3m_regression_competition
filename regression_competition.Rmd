@@ -414,7 +414,7 @@ data_tr_new$radio <- distHaversine(
 data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2)
 numeric_column_names <- names(data_tr_new)[sapply(data_tr_new, is.numeric)]
 corr_mat <- round(cor(data_tr_new[, numeric_column_names]), 2)
-ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+ggcorrplot(corr_mat, title = "Correlation Matrix",ggtheme = ggplot2::theme_minimal(),
                hc.order = TRUE) + 
   theme(axis.text.x = element_text(size = 7)) + 
   theme(axis.text.y = element_text(size = 7))
@@ -505,6 +505,36 @@ print(plot)
 ```
 
 # Specific Questions Corner
+
+# lat/lon 
+
+
+```{r}
+
+# Install the package if not already installed
+if (!require("plotly")) install.packages("plotly")
+
+# Load the package
+library(plotly)
+
+# Create an interactive 3D scatterplot
+plot_ly(data = data_train, x = ~longitud, y = ~latitud, z = ~precio.house.m2, color = "precio.house.m2",
+        type = "scatter3d", 
+        mode = "markers", 
+        marker = list(size = 3, 
+                      color = ~precio.house.m2,  # Map z values to color
+                      colorscale = c("blue", "green", "yellow", "red"), # Color gradient
+                      colorbar = list(title = "Z-axis"))) %>%
+  layout(title = "3D Scatterplot",
+         scene = list(
+           xaxis = list(title = "Longitude"),
+           yaxis = list(title = "Latitude"),
+           zaxis = list(title = "Price per Sqm")))
+
+
+```
+
+
 
 ## Grouping Barrio/Distrito
 
