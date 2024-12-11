@@ -95,6 +95,17 @@ k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
   return(folded_data)
 }
 
+num_id <- sapply(data, is.numeric)
+num_vars <- names(data)[num_id]
+num_vars
+cat_vars <- names(data)[!num_id]
+cat_vars
+  
+# Create the K-fold partition
+folded_data <- k_fold(data, cat_vars = cat_vars,
+                      obj_var = "log.precio.house.m2")$.folds
+# TOO many variables???
+
 temp_test = data
 
 # Para cargar la data ir a nicos thingis 222
@@ -113,60 +124,6 @@ proportions <- lapply(cat_vars, function(var) {
 names(proportions) <- cat_vars
 
 proportions[1]
-```
-
-```{r}
-# Initialize an empty list to store proportions for each fold and the global dataset
-all_proportions <- list()
-
-# Function to calculate proportions for a dataset
-calculate_proportions <- function(data, cat_vars) {
-  lapply(cat_vars, function(var) {
-    counts <- table(data[[var]])  # Count occurrences
-    props <- counts / sum(counts)  # Calculate proportions
-    data.frame(Category = names(counts), Count = as.numeric(counts), Proportion = round(props, 4))
-  })
-}
-
-# Add global proportions to the list
-all_proportions$Global <- calculate_proportions(data, cat_vars)
-
-# Add proportions for each fold to the list
-for (i in unique(folded_data)) {
-  temp_test <- data_train[which(folded_data == i), ]
-  all_proportions[[paste("Fold", i)]] <- calculate_proportions(temp_test, cat_vars)
-}
-
-# Combine proportions into a single table for each variable
-combined_tables <- lapply(cat_vars, function(var) {
-  # Extract the data for the variable from all proportions
-  tables <- lapply(all_proportions, function(prop_list) prop_list[[var]])
-  
-  # Combine the tables, aligning on the 'Category' column
-  combined <- Reduce(function(x, y) merge(x, y, by = "Category", all = TRUE), tables)
-  
-  # Rename columns for clarity
-  colnames(combined) <- c("Category", 
-                          "Global_Count", "Global_Proportion",
-                          paste0(rep(c("Fold", "Proportion"), length(unique(folded_data))), "_", rep(1:length(unique(folded_data)), each = 2)))
-  
-  # Replace NAs with zeros for missing categories
-  combined[is.na(combined)] <- 0
-  
-  return(combined)
-})
-
-# Assign names to the list of combined tables
-names(combined_tables) <- cat_vars
-
-# Example: Print the table for the first variable
-print(combined_tables[[1]])
-
-# Save all tables to a file (optional)
-# lapply(names(combined_tables), function(var) {
-#   write.csv(combined_tables[[var]], paste0(var, "_proportions.csv"), row.names = FALSE)
-# })
-
 ```
 
 ```{r}
@@ -226,5 +183,76 @@ custom_ggpairs <- ggpairs(
 custom_ggpairs
 
 ggsave("scatterplot_matrix.png", plot = custom_ggpairs, dpi = 300, width = 16, height = 12, units = "cm")
+
+```
+
+### EDA, correlation and shit
+
+```{r}
+library(effectsize) # For eta squared computation
+
+data = read_excel("Data/data_train.xlsx")
+
+   data$train_indices <- NULL
+  
+   # Eliminate 
+   data$barrio <- NULL
+   
+   # Eliminate 
+   data$cod_barrio <- NULL
+   
+   # Eliminate 
+   data$cod_distrito <- NULL
+   # Eliminate sup.const for collinearity reasons
+ data$sup.const <- NULL
+   # Turn categorical columns to factors
+   factor_columns <- c("distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
+                       "ascensor", "estado", "comercial", "M.30",
+                       "casco.historico")
+   data[factor_columns] <- lapply(data[factor_columns], as.factor)
+   
+num_id <- sapply(data, is.numeric)
+num_vars <- names(data)[num_id]
+num_vars
+cat_vars <- names(data)[!num_id]
+cat_vars
+
+
+# data_processed = preprocess(data)
+
+
+
+# Compute the correlations with "precio.house.m2"
+correlations <- sapply(data[,num_id],
+                       function(x) cor(data$precio.house.m2, x,
+                                             use = "complete.obs"))
+correlations[sort(abs(correlations),decreasing = T)[2:8] %>% names()]
+
+
+# Compute Eta Squared for the categorical variables
+eta_squared_results <- sapply(data[, cat_vars], function(cat_var) {
+  # Fit a simple ANOVA model
+  model <- aov(data$precio.house.m2 ~ as.factor(cat_var))
+  
+  # Calculate Eta Squared
+  eta_squared(model, partial = FALSE)$Eta2
+})
+
+# Sort Eta Squared values in decreasing order and display the most relevant ones
+sort(abs(eta_squared_results),decreasing = T)
+```
+
+```{r}
+ggplot(data = data, aes(x = sup.util)) +
+  geom_histogram(color = "black", fill = "#FFAEB9",
+                 binwidth = 20, alpha = 0.8) +
+  theme_bw() +
+  labs(y = "Frequency")
+
+ggplot(data = data, aes(x = log(sup.util))) +
+  geom_histogram(color = "black", fill = "#8FBC8F",
+                 binwidth = 0.15, alpha = 0.8) +
+  theme_bw() +
+  labs(y = "Frequency")
 
 ```

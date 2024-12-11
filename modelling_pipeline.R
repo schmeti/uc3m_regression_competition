@@ -187,10 +187,16 @@ check_multicollinearity <- function(model, data) {
   
   # Identify numerical and categorical variables
   predictors <- labels(terms(model)) # Variables used in the model
-  data <- data[predictors]
+  predictors <- predictors[!grepl(":", predictors)] # Exclude interaction terms
+  data <- data[,c("y", predictors)]
   num_id <- sapply(data, is.numeric)
-  num_vars <- names(data)[num_id]
+  num_vars <- setdiff(names(data)[num_id], "y")
   cat_vars <- names(data)[!num_id]
+  
+  new_model_formula <- as.formula(
+    paste("y ~", paste(predictors, collapse = " + "))
+  )
+  new_model = lm(new_model_formula,data = data)
   
   # Model Matrix
   X <- data[,num_vars]
@@ -201,7 +207,7 @@ check_multicollinearity <- function(model, data) {
   
   # Calculating VIF values using the car package
   vif_values <- tryCatch({
-    vif(model)
+    vif(new_model)
   }, error = function(e) {
     warning("Could not calculate VIF due to collinearity issues.")
     return(NA)
@@ -382,6 +388,14 @@ preprocess = function(data){
       )
     )
   data$distrito <- factor(data$distrito, levels = unique(data$distrito))
+  
+  # Unifying the numeric gases variables into a single dichotomic 'polluted'
+  # which is to be SO2 (PM10 behaves strangely)
+  pollutants <- c("CO", "NO2", "Nox", "O3", "PM10")
+  for (var in pollutants){
+    data[[var]] <- NULL                     
+  }
+  
   
   # Function to normalize multiple variables
   normalize_variables <- function(variables) {

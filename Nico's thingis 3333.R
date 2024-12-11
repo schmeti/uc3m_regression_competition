@@ -313,7 +313,75 @@ BIC_predictors <- labels(terms(lm_BIC))
 lm_BIC_formula <- as.formula(
   paste("y ~", paste(BIC_predictors, collapse = " + "))
 )
-k_fold_cv_linear_model(lm_formula, data_train)
+k_fold_cv_linear_model(lm_BIC_formula, data_train)
+
+## Add interactions between teh selected variables to the model
+num_BIC_predictors <- BIC_predictors[1:5]
+cat_BIC_predictors <- BIC_predictors[6:length(BIC_predictors)]
+
+combinations <- expand.grid(num_BIC_predictors, cat_BIC_predictors)
+inter_new <- paste(combinations$Var1, combinations$Var2, sep = ":")
+
+# Create plots for each interaction
+plots <- lapply(inter_new, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "y") +
+    theme_minimal()
+})
+# Interesting: 
+# latitud:banos
+# ref.hip.zona:ascensor
+# Poca_limp:ascensor
+# Pocas_zonas:ascensor
+# ref.hip.zona:estado
+# latitud:comercial
+# Poca_limp.comercial
+# radius:comercial
+interactions <- c(
+  "ref.hip.zona:estado",
+  "radius:comercial"
+)
+
+extra_BIC_predicotrs <- c(BIC_predictors, interactions)
+extra_BIC_formula <- as.formula(
+  paste("y ~", paste(extra_BIC_predicotrs, collapse = " + "))
+)
+
+extra_lm_BIC <- lm(extra_BIC_formula, data_train)
+summary(extra_lm_BIC)
+
+k_fold_cv_linear_model(extra_BIC_formula, data_train)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### Modeling: Interactions -----------------------------------------------------
@@ -443,16 +511,143 @@ plot(new_manual_BIC_model)
 
 
 ### New idea: StepAIC + Manual selection ---------------------------------------
-total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
+# total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
 # save(total_lm_AIC, file = "Modelos Nico 3/total_lm_AIC.RData")
-load("Modelos Nico 3/total_lm_BIC.RData")
+load("Modelos Nico 3/total_lm_AIC.RData")
 summary(total_lm_AIC)
 total_AIC_predictors <- labels(terms(total_lm_AIC))
 total_AIC_formula <- as.formula(
   paste("y ~", paste(total_AIC_predictors, collapse = " + "))
 )
-k_fold_cv_linear_model(total_AIC_formula, data_train)
+k_fold_cv_linear_model(total_AIC_formula, data_train) # errors
 
+total_AIC_interactions <- total_AIC_predictors[30:length(total_AIC_predictors)]
+total_AIC_interactions
+# Create plots for each interaction
+plots <- lapply(total_AIC_interactions, function(interaction) {
+  # Split the interaction into individual variables
+  vars <- unlist(strsplit(interaction, ":"))
+  
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = paste("Interaction:", interaction),
+         x = vars[1], y = "y") +
+    theme_minimal()
+})
+
+# Interesting 
+# longitud:tipo.casa
+# latitud:comercial
+# ref.hip-zona:distrito
+# ref.hip-zona:tipo.casa
+# ref.hip-zona:estado
+# antig:dorm
+# antig:banos
+# antig:tipo.casa
+# Ruidos_ext:tipo.casa
+# Ruidos_ext:inter.exter
+# Mal_olor:distrito
+# Mal_olor:dorm
+# Mal_olor:tipo.casa
+# Poca_limp:distrito
+# Poca_lim:tipo.casa
+# Poca_limp:ascensor
+# Poca_limp:comercial
+# Malas_comunic:banos
+# Malas_comunic:tipo.casa
+# Malas_comunic:estado --- Igual no
+# Malas_comunic:comercial
+# Pocas_zonas:dorm
+# Delincuencia:banos
+# Delincuencia:tipo.casa
+# PoblJubilada_div_Poblac.Total:tipo.casa
+# ...
 anova(total_lm_AIC)
+
+
+## Step AIC in-between BIC and AIC ---------------------------------------------
+#total_lm_mixedIC <- stepAIC(total_lm_model, direction = 'both', k = 5.5)
+summary(total_lm_mixedIC)
+save(total_lm_mixedIC, file = "Modelos Nico 3/total_lm_mixedIC.RData")
+load("Modelos Nico 3/total_lm_mixedIC.RData")
+
+total_lm_mixedIC_predictors <- labels(terms(total_lm_mixedIC))
+total_lm_mixedIC_formula <- as.formula(
+  paste("y ~", paste(total_lm_mixedIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_lm_mixedIC_formula, data_train) 
+# It is extremely good, let's try to make it a lil sparser
+
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(total_lm_mixedIC)
+
+anova(total_lm_mixedIC)
+# Unimportant terms:
+# Delincuencia:banos
+# Poca_limp:banos
+# Poca_limp:dorm
+# Mal_olor:tipo.casa
+# PoblJubilada_div_Poblac.Total
+# Mal_olor
+
+# Manual -----------------------------------------------------------------------
+manual_lm_mixedIC_predictors <- setdiff(labels(terms(total_lm_mixedIC)), 
+                                        c("Poca_limp:banos"))
+manual_lm_mixedIC_formula <- as.formula(
+  paste("y ~", paste(manual_lm_mixedIC_predictors, collapse = " + "))
+)
+manual_lm_mixedIC <- lm(manual_lm_mixedIC_formula, data = data_train)
+summary(manual_lm_mixedIC)
+k_fold_cv_linear_model(manual_lm_mixedIC_formula, data_train)
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(manual_lm_mixedIC)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Step AIC in-between BIC++ ---------------------------------------------------
+total_lm_BIC_Sparser <- stepAIC(total_lm_model, direction = 'both', k = 7.5)
+summary(total_lm_BIC_Sparser)
+
+total_lm_BIC_Sparser_predictors <- labels(terms(total_lm_BIC_Sparser))
+total_lm_BIC_Sparser_formula <- as.formula(
+  paste("y ~", paste(total_lm_BIC_Sparser_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_lm_BIC_Sparser_formula, data_train)
+
+total_lm_BIC_Sparser_interactions <- total_lm_BIC_Sparser_predictors[16:length(total_lm_BIC_Sparser_predictors)]
+
+
+
+
+
+
+
+### ======================== GAM ===============================================
+
+
+
+
+
+
+
+
+
 
 
