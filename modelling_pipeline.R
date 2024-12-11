@@ -391,10 +391,6 @@ preprocess = function(data){
     data[[var]] <- NULL                     
   }
   
-  # We select those individuals with non-high values on EVERY gas variable as non-polluted
-  # the rest will be considered polluted
-  data$polluted = factor(as.numeric(polluted_indivs != 0))
-  
   
   # Function to normalize multiple variables
   normalize_variables <- function(variables) {
