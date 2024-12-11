@@ -229,6 +229,8 @@ ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10, units =
 # Pairplot using ggpairs
 ggpairs(data_train[, numeric_column_names])
 
+
+library(lsr) 
 cramersV(data_train$dorm, data_train$banos)
 
 # Initialize a results matrix
