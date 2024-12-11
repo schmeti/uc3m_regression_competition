@@ -187,6 +187,7 @@ check_multicollinearity <- function(model, data) {
   
   # Identify numerical and categorical variables
   predictors <- labels(terms(model)) # Variables used in the model
+  predictors<- predictors[!grepl(":", predictors)] # Exclude interaction terms
   data <- data[predictors]
   num_id <- sapply(data, is.numeric)
   num_vars <- names(data)[num_id]

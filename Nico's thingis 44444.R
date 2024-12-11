@@ -165,3 +165,164 @@ preprocess = function(data,
 # Preprocess the data
 data_train <- preprocess(data)
 
+### K-fold CV ------------------------------------------------------------------
+k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+### Loop to find a comprehensively balanced seed for the k-fold
+# seed <- 1 
+# mix <- 1000000
+# k = 4
+# Tot_table <- list()
+# n <- 736
+# 
+# num_id <- sapply(data_train, is.numeric)
+# num_vars <- setdiff(names(data_train)[num_id], "y")
+# cat_vars <- names(data_train)[!num_id]
+# 
+# for (var in cat_vars){
+#   Tot_table[[as.name(var)]] = table(data_train[[as.name(var)]])/n
+# }
+# for (i in 1:1000){
+#   set.seed(i)
+#   folded_data <- fold(data_train, 
+#                       k = k, 
+#                       cat_col = "tipo.casa",
+#                       num_col = "y")
+#   mix_aux <- 0
+#   for (j in 1:k){
+#     temp_indexes <- which(folded_data$.folds == j)
+#     ll <- length(temp_indexes)
+#     for(var in cat_vars){
+#       mix_aux= mix_aux + sum(abs(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll - Tot_table[[as.name(var)]]))
+#     }
+#   }
+#   print(i)
+#   print(mix_aux)
+#   if (mix_aux < mix){
+#     seed <- i
+#     mix <- mix_aux
+#   }
+# }
+# print(seed) # Up until 2000 ---> 560 is the best (k=4)
+
+k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Set the previously studied best seed (balance-wise)
+  set.seed(560)
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+folded_data <- k_fold(data_train)
+
+# for (j in 1:k){
+#   print(paste(j, "- Fold   ==================================================="))
+#   for(var in cat_vars){
+#     print(paste(var,"----------------------------------------------------------"))
+#     print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
+#     print(Tot_table[[as.name(var)]])
+#   }
+# }
+
+
+### Linear Models CV -----------------------------------------------------------
+
+fit_linear_model = function(formula, data_train){
+  model = lm(formula,data = data_train)
+  return(model)
+}
+
+k_fold_cv_linear_model <- function(model_formula, 
+                                   data_train,
+                                   k=4){
+  cat("=== Running k_fold Cross Validation --- lm === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_linear_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # RsqAdj in log(y)
+    n_test = nrow(temp_test)
+    num_predictors = length(coefficients(temp_model)) 
+    
+    SSE = sum((temp_test$y - temp_predictions)^2)
+    SST = sum((mean(temp_test$y) - temp_test$y)^2)
+    
+    cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # RMSE in the original variable
+    SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    cv_rmse[i] <- sqrt(SSE_exp/n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse=cv_rmse,
+              mean_cv_rmse = mean(cv_rmse),
+              cv_rsq_adj=cv_rsq_adj,
+              mean_cv_rsq_adj = mean(cv_rsq_adj)
+  ))
+}
+
+#### Modelling: No interactions ------------------------------------------------
+## Base
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], "y")
+num_vars
+cat_vars <- names(data_train)[!num_id]
+cat_vars
+
+lm_formula <- as.formula(
+  paste("y ~", paste(c(num_vars, cat_vars), collapse = " + "))
+)
+lm_model = lm(lm_formula,data = data_train)
+summary(lm_model)
+k_fold_cv_linear_model(lm_formula, data_train)
+
+## Step BIC
+n <- 736
+lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
+summary(lm_BIC)
+BIC_predictors <- labels(terms(lm_BIC))
+lm_BIC_formula <- as.formula(
+  paste("y ~", paste(BIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(lm_BIC_formula, data_train)
