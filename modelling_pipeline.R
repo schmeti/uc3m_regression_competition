@@ -385,17 +385,11 @@ preprocess = function(data){
   data$distrito <- factor(data$distrito, levels = unique(data$distrito))
   
   # Unifying the numeric gases variables into a single dichotomic 'polluted'
-  n <- 736
-  pollutants <- c("CO", "NO2", "Nox", "O3", "SO2", "PM10")
-  l <- length(pollutants)
-  polluted <- matrix(0, nrow = n, ncol = l)
-  for (i in 1:l){
-    var = pollutants[i]
-    threshold = quantile(data[[var]], 0.75)    # Third quartile as threshold
-    polluted[,i] = (data[[var]] > threshold)   # Indicate individuals with high concentration
-    data[[var]] <- NULL                        # Erase the variable used
+  # which is to be SO2 (PM10 behaves strangely)
+  pollutants <- c("CO", "NO2", "Nox", "O3", "PM10")
+  for (var in pollutants){
+    data[[var]] <- NULL                     
   }
-  polluted_indivs <- apply(polluted, 1, sum)   # Sum by rows
   
   # We select those individuals with non-high values on EVERY gas variable as non-polluted
   # the rest will be considered polluted

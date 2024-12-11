@@ -137,10 +137,16 @@ preprocess = function(data,
     var = pollutants[i]
     threshold = quantile(data[[var]], 0.75)
     polluted[,i] = (data[[var]] > threshold)
-    data[[var]] <- NULL
+    if (var != "SO2"){
+      data[[var]] <- NULL
+    }
   }
   polluted_indivs <- apply(polluted, 1, sum)
-  data$polluted = factor(as.numeric(polluted_indivs != 0))
+  data$polluted = factor(
+  cut(as.numeric(polluted_indivs), 
+      breaks = c(-Inf, 0, 2, Inf), 
+      labels = c("0", "1-2", "3+"))
+)
   
   # Function to normalize multiple variables
   normalize_variables <- function(variables) {
@@ -305,7 +311,7 @@ k_fold_cv_linear_model <- function(model_formula,
 #### Modelling: No interactions ------------------------------------------------
 ## Base
 num_id <- sapply(data_train, is.numeric)
-num_vars <- setdiff(names(data_train)[num_id], "y")
+num_vars <- setdiff(names(data_train)[num_id], c("y"))
 num_vars
 cat_vars <- names(data_train)[!num_id]
 cat_vars
@@ -326,3 +332,29 @@ lm_BIC_formula <- as.formula(
   paste("y ~", paste(BIC_predictors, collapse = " + "))
 )
 k_fold_cv_linear_model(lm_BIC_formula, data_train)
+
+
+### Modeling: Interactions -----------------------------------------------------
+## Base
+total_lm_formula <- as.formula(
+  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", "*", "(", paste(cat_vars, collapse = " + "), ")" )
+)
+total_lm_model = lm(total_lm_formula,data = data_train)
+summary(total_lm_model)
+k_fold_cv_linear_model(total_lm_formula, data_train)
+
+## Step BIC
+n <- 736
+#total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
+#save(total_lm_BIC, file = "Modelos Nico 4/total_lm_BIC.RData")
+load("Modelos Nico 4/total_lm_BIC.RData")
+summary(total_lm_BIC)
+total_BIC_predictors <- labels(terms(total_lm_BIC))
+total_BIC_formula <- as.formula(
+  paste("y ~", paste(total_BIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(total_BIC_formula, data_train)
+
+# Diagnostics
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+plot(total_lm_BIC)

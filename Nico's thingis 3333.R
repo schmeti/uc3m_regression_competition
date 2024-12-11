@@ -570,6 +570,7 @@ anova(total_lm_AIC)
 #total_lm_mixedIC <- stepAIC(total_lm_model, direction = 'both', k = 5.5)
 summary(total_lm_mixedIC)
 save(total_lm_mixedIC, file = "Modelos Nico 3/total_lm_mixedIC.RData")
+load("Modelos Nico 3/total_lm_mixedIC.RData")
 
 total_lm_mixedIC_predictors <- labels(terms(total_lm_mixedIC))
 total_lm_mixedIC_formula <- as.formula(
