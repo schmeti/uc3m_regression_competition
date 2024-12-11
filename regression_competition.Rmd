@@ -223,12 +223,15 @@ p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::t
                hc.order = TRUE) + 
   theme(axis.text.x = element_text(size = 7)) + 
   theme(axis.text.y = element_text(size = 7))
-ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10, units = "in", dpi = 300) 
+# ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10,
+#        units = "in", dpi = 300) 
 
 
 # Pairplot using ggpairs
 ggpairs(data_train[, numeric_column_names])
 
+
+library(lsr) 
 cramersV(data_train$dorm, data_train$banos)
 
 # Initialize a results matrix
@@ -414,7 +417,7 @@ data_tr_new$radio <- distHaversine(
 data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2)
 numeric_column_names <- names(data_tr_new)[sapply(data_tr_new, is.numeric)]
 corr_mat <- round(cor(data_tr_new[, numeric_column_names]), 2)
-ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+ggcorrplot(corr_mat, title = "Correlation Matrix",ggtheme = ggplot2::theme_minimal(),
                hc.order = TRUE) + 
   theme(axis.text.x = element_text(size = 7)) + 
   theme(axis.text.y = element_text(size = 7))
@@ -437,65 +440,77 @@ data_train$radius <- distHaversine(
 ```
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
-# Function to create a ggplot map with a specified column as the color variable
 create_district_map <- function(points_sf, madrid_map, color_column) {
   column_data <- points_sf[[color_column]]
-
-
+  
   ggplot() +
     # Base map of Madrid
     geom_sf(data = madrid_map, fill = "lightgray", color = "white") +
     
     # Points representing districts or other categories
-    geom_sf(data = points_sf, aes_string(color = color_column), size = 3, alpha = 0.8) +
+    geom_sf(data = points_sf, aes_string(color = color_column), size = 2, alpha = 0.8) +
     
     # Title and axis labels
     labs(
-      title = "Geographical Distribution by Districts",
       x = "Longitude",
       y = "Latitude",
       color = color_column  # Dynamically set legend title
     ) +
     
-    # Improved theme
+    # Improved theme with optimized margins
     theme_minimal() +
     theme(
-      plot.title = element_text(size = 2*30, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 22, hjust = 0.5),
-      axis.title.x = element_text(size = 2*20),
-      axis.title.y = element_text(size = 2*20),
-      axis.text.x = element_text(size = 2*16, angle = 45, hjust = 1),
-      axis.text.y = element_text(size = 2*16),
-      legend.title = element_text(size = 3*20),
-      legend.text = element_text(size = 3*16),
-      legend.key.size = unit(4, "cm"),
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      axis.title.x = element_text(size = 14), # Slightly larger axis titles
+      axis.title.y = element_text(size = 14),
+      axis.text.x = element_text(size = 12, angle = 30, hjust = 1), # Adjusted axis text size
+      axis.text.y = element_text(size = 12),
+      legend.title = element_text(size = 14),
+      legend.text = element_text(size = 12),
+      legend.key.size = unit(0.8, "cm"), # Adjust legend size slightly
       panel.grid.major = element_line(color = "gray80", linetype = "dashed"),
-      panel.grid.minor = element_blank()
-    )+
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(t = 5, r = 5, b = 5, l = 5) # Reduce white space
+    ) +
     
-      if (is.numeric(column_data) && length(unique(column_data)) > 10) {
-            scale_color_viridis_c(option = "turbo")
-      } else {
-            scale_color_viridis_d(option = "turbo")  # Discrete color scale
-      }
+    # Dynamically select color scale based on column type
+    if (is.numeric(column_data) && length(unique(column_data)) > 10) {
+      scale_color_viridis_c(option = "turbo")  # Continuous
+    } else {
+      scale_color_viridis_d(option = "turbo")  # Discrete
+    }
+}
 
 
+
+# Directory to save the plots
+output_directory <- "Plots"  # Replace with your desired folder name
+
+# Create the directory if it doesn't exist
+if (!dir.exists(output_directory)) {
+  dir.create(output_directory)
 }
 
 # Loop through all columns in points_sf
-columns = names(points_sf)
+columns <- names(points_sf)
 columns <- setdiff(columns, c("train_indices", "geometry"))
 points_sf$ref.hip.zona <- as.numeric(points_sf$ref.hip.zona)
-
 
 for (col_name in columns) {
   # Create the plot for the current column
   plot <- create_district_map(points_sf, madrid_map, col_name)
 
-  # Print the plot
-  print(plot)
+  # Save the plot as an image
+  file_name <- paste0(output_directory, "/", col_name, ".jpg")  # Create file name dynamically
+  ggsave(
+    filename = file_name,
+    plot = plot,
+    width = 12,    # Width of the image
+    height = 10,   # Height of the image
+    units = "in",  # Units for dimensions
+    dpi = 300      # Resolution
+  )
 }
-
 
 ```
 
@@ -505,6 +520,36 @@ print(plot)
 ```
 
 # Specific Questions Corner
+
+# lat/lon 
+
+
+```{r}
+
+# Install the package if not already installed
+if (!require("plotly")) install.packages("plotly")
+
+# Load the package
+library(plotly)
+
+# Create an interactive 3D scatterplot
+plot_ly(data = data_train, x = ~longitud, y = ~latitud, z = ~precio.house.m2, color = "precio.house.m2",
+        type = "scatter3d", 
+        mode = "markers", 
+        marker = list(size = 3, 
+                      color = ~precio.house.m2,  # Map z values to color
+                      colorscale = c("blue", "green", "yellow", "red"), # Color gradient
+                      colorbar = list(title = "Z-axis"))) %>%
+  layout(title = "3D Scatterplot",
+         scene = list(
+           xaxis = list(title = "Longitude"),
+           yaxis = list(title = "Latitude"),
+           zaxis = list(title = "Price per Sqm")))
+
+
+```
+
+
 
 ## Grouping Barrio/Distrito
 
