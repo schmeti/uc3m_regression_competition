@@ -201,75 +201,75 @@ corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper",
 
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
-# Install and load necessary packages
-library(reshape2)
-library(ggplot2)
-library(GGally) # This is required for ggpairs
-
-# Compute correlation matrix
-numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
-corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
-melted_corr_mat <- melt(corr_mat)
-
-# Plot correlation heatmap
-ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
-  geom_tile() +
-  geom_text(aes(label = value), color = "black", size = 4)+
-  scale_fill_gradient(low = "white", high = "red") +
-  theme_minimal()
-
-library(ggcorrplot)
-p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
-               hc.order = TRUE) + 
-  theme(axis.text.x = element_text(size = 7)) + 
-  theme(axis.text.y = element_text(size = 7))
-# ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10,
-#        units = "in", dpi = 300) 
-
-
-# Pairplot using ggpairs
-ggpairs(data_train[, numeric_column_names])
-
-
-library(lsr) 
-cramersV(data_train$dorm, data_train$banos)
-
-# Initialize a results matrix
-cram_results <- matrix(NA, nrow = length(cat.var), ncol = length(cat.var),
-                  dimnames = list(cat.var, cat.var))
-
-# Loop through variable pairs
-for (i in 1:(length(cat.var))) {
-  for (j in (i):length(cat.var)) {
-    var1 <- cat.var[i]
-    var2 <- cat.var[j]
-    
-    # Calculate Cramér's V
-    cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
-    cram_results[j, i] <- cram_results[i, j]  # Symmetric
-  }
-}
-
-# Convert to a heatmap-friendly format
-print(cram_results)
-
-# Melt results for heatmap
-melted_results <- melt(cram_results, na.rm = TRUE)
-
-# Plot heatmap
-ggplot(melted_results, aes(Var1, Var2, fill = value)) +
-  geom_tile(color = "white") +  # Add white borders for better contrast
-  geom_text(aes(label = sprintf("%.2f", value)), size = 12, color = "black") +  # Larger text for values
-  scale_fill_gradient(low = "white", high = "#CD5C5C", limits = c(0, 1)) +  # Adjust color scale
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 20, angle = 45, hjust = 1),  # Larger x-axis labels
-    axis.text.y = element_text(size = 20),  # Larger y-axis labels
-    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),  # Larger title
-    legend.title = element_text(size = 18),  # Larger legend title
-    legend.text = element_text(size = 16)  # Larger legend text
-  ) +
-  labs(title = "Cramér's V Heatmap", fill = "Cramér's V", x = "", y = "")
+# # Install and load necessary packages
+# library(reshape2)
+# library(ggplot2)
+# library(GGally) # This is required for ggpairs
+# 
+# # Compute correlation matrix
+# numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
+# corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
+# melted_corr_mat <- melt(corr_mat)
+# 
+# # Plot correlation heatmap
+# ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
+#   geom_tile() +
+#   geom_text(aes(label = value), color = "black", size = 4)+
+#   scale_fill_gradient(low = "white", high = "red") +
+#   theme_minimal()
+# 
+# library(ggcorrplot)
+# p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+#                hc.order = TRUE) + 
+#   theme(axis.text.x = element_text(size = 7)) + 
+#   theme(axis.text.y = element_text(size = 7))
+# # ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10,
+# #        units = "in", dpi = 300) 
+# 
+# 
+# # Pairplot using ggpairs
+# ggpairs(data_train[, numeric_column_names])
+# 
+# 
+# library(lsr) 
+# cramersV(data_train$dorm, data_train$banos)
+# 
+# # Initialize a results matrix
+# cram_results <- matrix(NA, nrow = length(cat.var), ncol = length(cat.var),
+#                   dimnames = list(cat.var, cat.var))
+# 
+# # Loop through variable pairs
+# for (i in 1:(length(cat.var))) {
+#   for (j in (i):length(cat.var)) {
+#     var1 <- cat.var[i]
+#     var2 <- cat.var[j]
+#     
+#     # Calculate Cramér's V
+#     cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
+#     cram_results[j, i] <- cram_results[i, j]  # Symmetric
+#   }
+# }
+# 
+# # Convert to a heatmap-friendly format
+# print(cram_results)
+# 
+# # Melt results for heatmap
+# melted_results <- melt(cram_results, na.rm = TRUE)
+# 
+# # Plot heatmap
+# ggplot(melted_results, aes(Var1, Var2, fill = value)) +
+#   geom_tile(color = "white") +  # Add white borders for better contrast
+#   geom_text(aes(label = sprintf("%.2f", value)), size = 12, color = "black") +  # Larger text for values
+#   scale_fill_gradient(low = "white", high = "#CD5C5C", limits = c(0, 1)) +  # Adjust color scale
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_text(size = 20, angle = 45, hjust = 1),  # Larger x-axis labels
+#     axis.text.y = element_text(size = 20),  # Larger y-axis labels
+#     plot.title = element_text(size = 24, face = "bold", hjust = 0.5),  # Larger title
+#     legend.title = element_text(size = 18),  # Larger legend title
+#     legend.text = element_text(size = 16)  # Larger legend text
+#   ) +
+#   labs(title = "Cramér's V Heatmap", fill = "Cramér's V", x = "", y = "")
 
 ```
 
@@ -583,6 +583,50 @@ points_sf$distrito <- factor(points_sf$distrito, levels = unique(points_sf$distr
 plot <- create_district_map(points_sf, madrid_map, "distrito")
 print(plot)
 
+```
+
+
+```{r}
+# Unifying the numeric gases variables into a single dichotomic 'polluted'
+n <- 736
+pollutants <- c("CO", "NO2", "Nox", "O3", "SO2", "PM10")
+l <- length(pollutants)
+polluted <- matrix(0, nrow = n, ncol = l)
+for (i in 1:l){
+  var = pollutants[i]
+  threshold = quantile(points_sf[[var]], 0.75)    # Third quartile as threshold
+  polluted[,i] = (points_sf[[var]] > threshold)   # Indicate individuals with high concentration
+  points_sf[[var]] <- NULL                        # Erase the variable used
+}
+polluted_indivs <- apply(polluted, 1, sum)   # Sum by rows
+
+# We select those individuals with non-high values on EVERY gas variable as non-polluted
+# the rest will be considered polluted
+points_sf$polluted = factor(as.numeric(polluted_indivs != 0))
+
+
+plot <- create_district_map(points_sf, madrid_map, "polluted")
+print(plot)
+
+
+plot_price_by_categories(data_train, , "precio.house.m2")
+
+```
+```{r}
+p <- ggplot(points_sf, aes_string(x = "polluted", y = "precio.house.m2")) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", "precio.house.m2", "by", var),
+        x = "polluted",
+        y = "precio.house.m2"
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+print(p)
 ```
 
 
