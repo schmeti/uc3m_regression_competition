@@ -284,6 +284,17 @@ preprocess = function(data){
   # Eliminate 
   data$cod_distrito <- NULL
   
+  
+  # Eliminate gasses
+  data$M.30 <- NULL  
+  data$CO <- NULL  
+  data$PM10 <- NULL  
+  data$NO2 <- NULL
+  data$Nox <- NULL
+  data$O3 <- NULL
+  
+  
+  
   # Logarithmic objective variable
   if ("precio.house.m2" %in% colnames(data)) {
     data$y <- log(data$precio.house.m2) 
@@ -513,7 +524,7 @@ predict_and_write = function(data_test, model, path = "Data/predicted_prices.xls
   
   # write predictions to excel
   wb <- loadWorkbook(path)
-  writeData(wb, sheet = "Hoja1", x = prediction, startCol = 2, startRow = 2)
+  writeData(wb, sheet = "Hoja1", x = exp(prediction), startCol = 2, startRow = 2)
   saveWorkbook(wb, path, overwrite = TRUE)
 }
 
@@ -539,29 +550,30 @@ run_pipeline = function(data_train,
   load_model_path <- trimws(load_model_path)
   if (!is.null(load_model_path) && load_model_path != "") {
     model = load_model(load_model_path)
-    model_formular = formula(model)
+    #model_formular = formula(model)
     cat(paste(" Load Model ",load_model_path, " -- DONE\n"))
   } else {
     model = fit_linear_model(formula = model_formular, data_train = data_train_processed)
     cat("Fit Model -- DONE\n")
     
   }
+  
   print(summary(model))
   
   # check multicolinearity
-  multicollinearity <- check_multicollinearity(model, data_train_processed)
-  cat("Check Multicolinearity -- DONE\n")
+  # multicollinearity <- check_multicollinearity(model, data_train_processed)
+  # cat("Check Multicolinearity -- DONE\n")
+  # 
   
-  
-  # predict and score on test data set
-  score = score_model(model = model,
-                      data = data_train_processed,
-                      model_formula=model_formular)
-  cat("Scoring -- DONE\n")
+  # # predict and score on test data set
+  # score = score_model(model = model,
+  #                     data = data_train_processed,
+  #                     model_formula=model_formular)
+  # cat("Scoring -- DONE\n")
   
   # diagnostics plots
-  diagnostic_plots(model)
-  cat("Plot -- DONE\n")
+  # diagnostic_plots(model)
+  # cat("Plot -- DONE\n")
   
   # predict
   if (!is.null(predict_and_write_path) && predict_and_write_path != "") {
@@ -587,14 +599,14 @@ run_pipeline = function(data_train,
 ################################################################################
 ### run
 data_train <- read_excel("Data/data_train.xlsx")
-#data_test <- read_excel("Data/data_test_tryout.xlsx")
+data_test <- read_excel("Data/data_test.xlsx")
 
 run_pipeline(data_train=data_train,
              data_test=data_test,
-             load_model_path="Modelos Nico/total_lm_BIC.RData",
+             load_model_path="Modelos/Ridge/final_Ridge_model.RData",
              store_model = FALSE,
-             #predict_and_write_path = "Data/predicted_prices.xlsx",
-             model_formula = y ~ distrito,
+             predict_and_write_path = "Data/predicted_prices.xlsx",
+             #model_formula = y ~ distrito,
              )
 
 
