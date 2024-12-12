@@ -256,10 +256,13 @@ k_fold_cv_linear_model <- function(model_formula,
   folded_data <- k_fold(data_train,k)$.folds
   
   # Initialize a vector to store each fold's rsme
-  cv_rmse <- numeric(k)
+  cv_rmse_y <- numeric(k)
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_logy <- numeric(k)
   
   # Initialize a vector to store each fold's Rsq_adj
-  cv_rsq_adj <- numeric(k)
+  cv_rsq_adj_logy <- numeric(k)
   
   for (i in 1:k){
     # Create the fold's test/train split
@@ -279,18 +282,23 @@ k_fold_cv_linear_model <- function(model_formula,
     SSE = sum((temp_test$y - temp_predictions)^2)
     SST = sum((mean(temp_test$y) - temp_test$y)^2)
     
-    cv_rsq_adj[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    cv_rsq_adj_logy[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
     
-    # RMSE in the original variable
+    # RMSE in log(y)
+    cv_rmse_logy[i] <- sqrt(SSE/n_test)
+    
+    # RMSE in y
     SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
-    cv_rmse[i] <- sqrt(SSE_exp/n_test)
+    cv_rmse_y[i] <- sqrt(SSE_exp/n_test)
   }
   
   # Return the vector with rmse for each k-fold
-  return(list(cv_rmse=cv_rmse,
-              mean_cv_rmse = mean(cv_rmse),
-              cv_rsq_adj=cv_rsq_adj,
-              mean_cv_rsq_adj = mean(cv_rsq_adj)
+  return(list(cv_rmse_y=cv_rmse_y,
+              mean_cv_rmse_y = mean(cv_rmse_y),
+              cv_rmse_logy=cv_rmse_logy,
+              mean_cv_rmse_logy = mean(cv_rmse_logy),
+              cv_rsq_adj_logy=cv_rsq_adj_logy,
+              mean_cv_rsq_adj_logy = mean(cv_rsq_adj_logy)
   ))
 }
 
@@ -352,8 +360,9 @@ check_multicollinearity <- function(model, data) {
   return()
 }
 
+########################## Linear Models #######################################
 
-#### Modelling: No interactions ------------------------------------------------
+#### Modelling: No interactions ================================================
 ## Base
 num_id <- sapply(data_train, is.numeric)
 num_vars <- setdiff(names(data_train)[num_id], c("y"))
@@ -421,7 +430,9 @@ plots <- lapply(inter_new1, function(interaction) {
 m=1
 plots[[m]];m=m+1
 
-inter_preselected <- c("log.sup.util:comercial", "radius:tipo.casa", "latitud:tipo.casa", "log.sup.util:ascensor", "ref.hip.zona:banos", "log.sup.util:banos")
+inter_preselected <- c("log.sup.util:comercial", "radius:tipo.casa", 
+                       "latitud:tipo.casa", "log.sup.util:ascensor", 
+                       "ref.hip.zona:banos", "log.sup.util:banos")
 # Create plots for each interaction
 plots <- lapply(inter_selected, function(interaction) {
   # Split the interaction into individual variables
@@ -482,7 +493,7 @@ final_lm1_formula <- as.formula(
 )
 final_lm1_model = lm(final_lm1_formula, data_train)
 save(final_lm1_model, file = "Modelos Nico/final_lm1_model.RData")
-load("Modelos Nico 4/final_lm1_model.RData")
+load("Modelos Nico/final_lm1_model.RData")
 
 summary(final_lm1_model)
 anova(final_lm1_model)
@@ -493,7 +504,8 @@ par(mfrow = c(2, 2))
 plot(final_lm1_model)
 
 ## Model 2 --- Sparse AIC after interacting ------------------------------------
-final_lm2_predictors <- labels(terms(sparse_AIC_model))
+final_lm2_predictors <- c(labels(terms(sparse_AIC_model))[1:11], c("dorm"), 
+                          labels(terms(sparse_AIC_model))[11:16]) # Added dorm bc it seemed important
 final_lm2_formula <- as.formula(
   paste("y ~", paste(final_lm2_predictors, collapse = " + "))
 )
@@ -510,25 +522,29 @@ par(mfrow = c(2, 2))
 plot(final_lm2_model)
 
 
+########################### GAM Models #########################################
+## Model 1 --- Manual selection after BIC --------------------------------------
+final_gam1_predictors <- final_lm1_predictors
+num_final_gam1_predictors <- final_gam1_predictors[1:6]
+cat_final_gam1_predictors <- final_gam1_predictors[7:12]
+inter_final_gam1_predictors <- final_gam1_predictors[13]
+# We will omit latitud and radius and consider a bi-dimensional smooth term
+# based in latitud and longitud.
+#log.sup.util will be implemented through the interaction
+num_final_gam1_predictors <- setdiff(num_final_gam1_predictors, c("latitud", "radius", "log.sup.util"))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 20, bs = 'ps') +
+                          s(Poca_limp, k = 20, bs = 'ps') +
+                          s(Pocas_zonas, k = 20, bs = 'ps') +
+                          s(log.sup.util, k = 20, bs = 'ps', by = comercial) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam1_model)
 
 
 
