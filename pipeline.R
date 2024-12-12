@@ -549,8 +549,8 @@ run_pipeline = function(data_train,
   print(summary(model))
   
   # check multicolinearity
-  #multicollinearity <- check_multicollinearity(model, data_train_processed)
-  #cat("Check Multicolinearity -- DONE\n")
+  multicollinearity <- check_multicollinearity(model, data_train_processed)
+  cat("Check Multicolinearity -- DONE\n")
   
   
   # predict and score on test data set
@@ -591,11 +591,12 @@ data_train <- read_excel("Data/data_train.xlsx")
 
 run_pipeline(data_train=data_train,
              data_test=data_test,
-             #load_model_path="Modelos Nico 3/total_lm_BIC.RData",
+             load_model_path="Modelos Nico/total_lm_BIC.RData",
              store_model = FALSE,
              #predict_and_write_path = "Data/predicted_prices.xlsx",
              model_formula = y ~ distrito,
              )
+
 
 
 
