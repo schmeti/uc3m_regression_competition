@@ -8,15 +8,315 @@ library(mgcv)
 library(MASS)
 library(geosphere)
 
+### Preprocess & Data ----------------------------------------------------------
+
+data <- read_excel("Data/data_train.xlsx")
+
+preprocess = function(data,
+                      predictors){
+  
+  # Eliminate
+  data$train_indices <- NULL
+  
+  # Eliminate 
+  data$barrio <- NULL
+  
+  # Eliminate 
+  data$cod_barrio <- NULL
+  
+  # Eliminate 
+  data$cod_distrito <- NULL
+  
+  # Logarithmic objective variable
+  data$y <- log(data$precio.house.m2) 
+  data$precio.house.m2 <- NULL # Eliminate the old variable
+  
+  # Eliminate sup.const for collinearity reasons
+  data$sup.const <- NULL
+  
+  # Logarithmic transform
+  data$log.sup.util <- log(data$sup.util) 
+  data$sup.util <- NULL
+  
+  # Eliminate casco.historico for duplcate information reasons
+  data$casco.historico <- NULL
+  
+  # Eliminate M.30 for duplcate information reasons
+  data$M.30 <- NULL
+  
+  # radius
+  # Load required library
+  library(geosphere)
+  # Central point (Puerta del Sol)
+  center <- c(-3.7038, 40.4168)
+  
+  # Calculate distances and add a new column
+  data$radius <- distHaversine(
+    matrix(c(data$longitud, data$latitud), ncol = 2),
+    matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
+  ) / 1000  # Convert meters to kilometers
+  
+  # Turn categorical columns to factors
+  factor_columns <- c("distrito", "banos", "dorm", "tipo.casa", "inter.exter", 
+                      "ascensor", "estado", "comercial")
+  data[factor_columns] <- lapply(data[factor_columns], as.factor)
+  
+  # group categories via manual evaluation
+  # Dorm
+  data <- data %>%
+    mutate(
+      dorm = case_when(
+        dorm %in% c("0", "1") ~ "0-1",
+        dorm %in% c("4", "5", "6", "7") ~ "+4",
+        TRUE ~ as.character(dorm)  
+      )
+    )
+  data$dorm <- factor(data$dorm, levels = unique(data$dorm))
+  
+  # Banos
+  data <- data %>%
+    mutate(
+      banos = case_when(
+        banos %in% c("3", "4", "5", "7") ~ "+3",
+        TRUE ~ as.character(banos)  
+      )
+    )
+  data$banos <- factor(data$banos, levels = unique(data$banos))
+  
+  # tipo.casa
+  data <- data %>%
+    mutate(
+      tipo.casa = case_when(
+        tipo.casa %in% c("atico", "estudio") ~ "Atico/Estudio",
+        tipo.casa %in% c("piso", "Otros") ~ "Piso",
+        tipo.casa %in% c("chalet", "duplex") ~ "Chalet/Duplex",
+        TRUE ~ as.character(tipo.casa)  
+      )
+    )
+  data$tipo.casa <- factor(data$tipo.casa, levels = unique(data$tipo.casa))
+  
+  # estado
+  data <- data %>%
+    mutate(
+      estado = case_when(
+        estado %in% c("a_reformar", "reg,-mal") ~ "Bajo",
+        estado %in% c("excelente", "nuevo-semin,", "reformado") ~ "Alto",
+        estado %in% c("buen_estado", "segunda_mano") ~ "Medio",
+      )
+    )
+  data$estado <- factor(data$estado, levels = unique(data$estado))
+  
+  
+  data <- data %>%
+    mutate(
+      distrito = case_when(
+        # South Districts
+        distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
+        
+        # Central Districts
+        distrito %in% c("carabanchel", "latina") ~ "South West",
+        
+        # North Districts
+        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "South East",
+        
+        # West Districts
+        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "North East",
+        
+        # Default to original values if no match
+        TRUE ~ as.character(distrito)
+      )
+    )
+  data$distrito <- factor(data$distrito, levels = unique(data$distrito))
+  
+  # Unifying the numeric gases variables into a single dichotomic 'polluted'
+  # which is to be SO2 (PM10 behaves strangely)
+  pollutants <- c("CO", "NO2", "Nox", "O3", "PM10")
+  for (var in pollutants){
+    data[[var]] <- NULL                     
+  }
+  
+  # Function to normalize multiple variables
+  normalize_variables <- function(variables) {
+    for (var in variables) {
+      data[[var]] <- (data[[var]] - mean(data[[var]], na.rm = TRUE)) / sd(data[[var]], na.rm = TRUE)
+    }
+    return(data)
+  }
+  
+  # Generate the formula automatically
+  num_id <- sapply(data, is.numeric) 
+  num_vars <- names(data)[num_id] %>% setdiff(c("y", "radius"))
+  
+  data = normalize_variables(num_vars)
+  
+  # Eliminar columnas no deseadas
+  data <- subset(data, select=predictors)
+  
+  return(data)
+}
+
+# Preprocess the data
+data_train <- preprocess(data)
+
+### K-fold CV ------------------------------------------------------------------
+k_fold <- function(data, k, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+### Loop to find a comprehensively balanced seed for the k-fold
+# seed <- 1
+# mix <- 1000000
+# k = 4
+# Tot_table <- list()
+# n <- 736
+# 
+# num_id <- sapply(data_train, is.numeric)
+# num_vars <- setdiff(names(data_train)[num_id], "y")
+# cat_vars <- names(data_train)[!num_id]
+# 
+# for (var in cat_vars){
+#   Tot_table[[as.name(var)]] = table(data_train[[as.name(var)]])/n
+# }
+# for (i in 1:1000){
+#   set.seed(i)
+#   folded_data <- fold(data_train,
+#                       k = k,
+#                       cat_col = "tipo.casa",
+#                       num_col = "y")
+#   mix_aux <- 0
+#   for (j in 1:k){
+#     temp_indexes <- which(folded_data$.folds == j)
+#     ll <- length(temp_indexes)
+#     for(var in cat_vars){
+#       mix_aux= mix_aux + sum(abs(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll - Tot_table[[as.name(var)]]))
+#     }
+#   }
+#   print(i)
+#   print(mix_aux)
+#   if (mix_aux < mix){
+#     seed <- i
+#     mix <- mix_aux
+#   }
+# }
+# print(seed) # Up until 2000 ---> 248 is the best (k=4)
+
+k_fold <- function(data, k=4, cat_vars = c("tipo.casa"), obj_var = "y") {
+  # Set the previously studied best seed (balance-wise)
+  set.seed(248)
+  
+  # Create a k-fold partition with balanced cat_vars and which
+  # tries to minimize similar values in obj_var
+  folded_data <- fold(data, 
+                      k = k, 
+                      cat_col = cat_vars,
+                      num_col = obj_var)
+  
+  # It adds a new variable, .folds, which assigns a value 1 to k to each
+  # instance, dividing them by folds
+  
+  # Return the new dataset
+  return(folded_data)
+}
+
+folded_data <- k_fold(data_train)
+
+# for (j in 1:k){
+#   print(paste(j, "- Fold   ==================================================="))
+#   for(var in cat_vars){
+#     print(paste(var,"----------------------------------------------------------"))
+#     print(table(data_train[[as.name(var)]][which(folded_data$.folds == j)])/ll)  
+#     print(Tot_table[[as.name(var)]])
+#   }
+# }
+
+
+### Linear Models CV -----------------------------------------------------------
+fit_linear_model = function(formula, data_train){
+  model = lm(formula,data = data_train)
+  return(model)
+}
+
+k_fold_cv_linear_model <- function(model_formula, 
+                                   data_train,
+                                   k=4){
+  cat("=== Running k_fold Cross Validation --- lm === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_y <- numeric(k)
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_logy <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj_logy <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_linear_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # RsqAdj in log(y)
+    n_test = nrow(temp_test)
+    num_predictors = length(coefficients(temp_model)) 
+    
+    SSE = sum((temp_test$y - temp_predictions)^2)
+    SST = sum((mean(temp_test$y) - temp_test$y)^2)
+    
+    cv_rsq_adj_logy[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # RMSE in log(y)
+    cv_rmse_logy[i] <- sqrt(SSE/n_test)
+    
+    # RMSE in y
+    SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    cv_rmse_y[i] <- sqrt(SSE_exp/n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse_y=cv_rmse_y,
+              mean_cv_rmse_y = mean(cv_rmse_y),
+              cv_rmse_logy=cv_rmse_logy,
+              mean_cv_rmse_logy = mean(cv_rmse_logy),
+              cv_rsq_adj_logy=cv_rsq_adj_logy,
+              mean_cv_rsq_adj_logy = mean(cv_rsq_adj_logy)
+  ))
+}
+
 ## Check Multicoliniearity -----------------------------------------------------
 check_multicollinearity <- function(model, data) {
   
   # Identify numerical and categorical variables
   predictors <- labels(terms(model)) # Variables used in the model
-  data <- data[predictors]
+  predictors <- predictors[!grepl(":", predictors)] # Exclude interaction terms
+  data <- data[,c("y", predictors)]
   num_id <- sapply(data, is.numeric)
-  num_vars <- names(data)[num_id]
+  num_vars <- setdiff(names(data)[num_id], "y")
   cat_vars <- names(data)[!num_id]
+  
+  new_model_formula <- as.formula(
+    paste("y ~", paste(predictors, collapse = " + "))
+  )
+  new_model = lm(new_model_formula,data = data)
   
   # Model Matrix
   X <- data[,num_vars]
@@ -27,7 +327,7 @@ check_multicollinearity <- function(model, data) {
   
   # Calculating VIF values using the car package
   vif_values <- tryCatch({
-    vif(model)
+    vif(new_model)
   }, error = function(e) {
     warning("Could not calculate VIF due to collinearity issues.")
     return(NA)
@@ -57,145 +357,66 @@ check_multicollinearity <- function(model, data) {
   }
   
   # Return results
-  return(list(
-    condition_number = condition_number,
-    vif_values = vif_values
-  ))
+  return()
 }
 
-data <- read_excel("Data/data_train.xlsx")
+########################## Linear Models #######################################
 
-# radius
-# Central point (Puerta del Sol)
-center <- c(-3.7038, 40.4168)
-
-# Calculate distances and add a new column
-data$radius <- distHaversine(
-  matrix(c(data$longitud, data$latitud), ncol = 2),
-  matrix(rep(center, nrow(data)), ncol = 2, byrow = TRUE)
-) / 1000  # Convert meters to kilometers
-
-# distrito
-data$distrito[data$distrito %in% c("carabanchel", "puente_vallecas", "usera","vallecas","villaverde")] = "south"
-data$distrito[data$distrito %in% c("arganzuela", "centro", "chamberi","retiro","salamanca")] = "centro"
-data$distrito[data$distrito %in% c("barajas", "chamartin", "fuencarral", "hortaleza", "tetuan")] = "north"
-data$distrito[data$distrito %in% c("moncloa","latina")] = "west"
-data$distrito[data$distrito %in% c("vallecas","moratalaz","vicalvaro","san_blas","ciudad_lineal")] = "east"
-
-# dorm
-data$dorm[data$dorm %in% c("0","1")] = "0&1"
-data$dorm[data$dorm %in% c("3","4")] = "3&4"
-data$dorm[data$dorm %in% c("5","6","7","8","9","10")] = "5+"
-
-#banos
-data$banos[data$banos %in% c("3","4","5","6","7","8")] = "3+"
-
-# type
-data$tipo.casa[data$tipo.casa %in% c("Otros","piso")] = "piso"
-data$tipo.casa[data$tipo.casa %in% c("chalet","duplex")] = "chalet+duplex"
-data$tipo.casa[data$tipo.casa %in% c("atico","estudio")] = "atico+estudio"
-
-# state
-data$estado[data$estado %in% c("excelente","nuevo-semin,","reformado")] = "bueno"
-data$estado[data$estado %in% c("buen_estado","segunda_mano")] = "medio"
-data$estado[data$estado %in% c("a_reformar","reg,-mal")] = "malo"
-
-# normalize latitude and longitude
-data$longitud <- (data$longitud - mean(data$longitud))/sd(data$longitud)
-data$latitud <- (data$latitud - mean(data$latitud))/sd(data$latitud)
-
-data$train_indices <- NULL
-data$log.precio.house.m2 <- log(data$precio.house.m2) 
-data$precio.house.m2 <- NULL
-data$barrio <- NULL
-data$cod_barrio <- NULL
-data$cod_distrito <- NULL
-data$sup.const <- NULL
-factor_columns <- c("distrito", "dorm", "banos", "tipo.casa", "inter.exter", 
-                    "ascensor", "estado", "comercial", "casco.historico", "M.30")
-data[factor_columns] <- lapply(data[factor_columns], as.factor)
-
-
-num_id <- sapply(data, is.numeric)
-num_vars <- names(data)[num_id]
+#### Modelling: No interactions ================================================
+## Base
+num_id <- sapply(data_train, is.numeric)
+num_vars <- setdiff(names(data_train)[num_id], c("y"))
 num_vars
-cat_vars <- names(data)[!num_id]
+cat_vars <- names(data_train)[!num_id]
 cat_vars
 
-data_train <- data
-data_train$y <- data_train$log.precio.house.m2
-data_train$log.precio.house.m2 <- NULL
-num_id <- sapply(data_train, is.numeric)
-num_vars <- setdiff(names(data_train)[num_id],"y")
-predictors <- c("ref.hip.zona", "antig", "Poca_limp", "PM10", "Pobl.0_14_div_Poblac.Total" ,   "PoblJubilada_div_Poblac.Total", "Inmigrantes.porc", "Pocas_zonas")
-cat_vars = factor_columns
-
-# Create a fucntion to automatically normalize the numerical vars
-normalize = function(row){
-  row = (row - mean(row))/sd(row)
-  return(row)
-}
-
-data_train[setdiff(num_vars, "radius")] = apply(data_train[setdiff(num_vars, "radius")], 2, normalize)
-
-
-#### No interactions
 lm_formula <- as.formula(
   paste("y ~", paste(c(num_vars, cat_vars), collapse = " + "))
 )
 lm_model = lm(lm_formula,data = data_train)
 summary(lm_model)
-check_multicollinearity(lm_model, data = data_train)
+k_fold_cv_linear_model(lm_formula, data_train)
+check_multicollinearity(lm_model, data_train)
 
-### Step BIC
+## Step BIC
 n <- 736
 lm_BIC <- stepAIC(lm_model, direction = 'both', k = log(n))
 summary(lm_BIC)
-check_multicollinearity(lm_BIC, data = data_train)
+BIC_predictors <- labels(terms(lm_BIC))
+lm_BIC_formula <- as.formula(
+  paste("y ~", paste(BIC_predictors, collapse = " + "))
+)
+k_fold_cv_linear_model(lm_BIC_formula, data_train)
+check_multicollinearity(lm_BIC, data_train)
+# Diagnostics
+par(mfrow = c(2, 2))
+plot(lm_BIC)
 
-### Step AIC
-lm_AIC <- stepAIC(lm_model, direction = 'both', k = 2)
+## Step AIC
+lm_AIC <- stepAIC(lm_model, direction = 'both')
 summary(lm_AIC)
-check_multicollinearity(lm_AIC, data = data_train)
-
-# Create the formula with p-splines for numerical vars. and straight categorical vars.
-predictors <- labels(terms(lm_BIC))
-num_id <- sapply(data_train[predictors], is.numeric)
-num_vars <- names(data_train[predictors])[num_id]
-cat_vars <- names(data_train[predictors])[!num_id]
-
-
-gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"),cat_vars), collapse = " + "))
+AIC_predictors <- labels(terms(lm_AIC))
+lm_AIC_formula <- as.formula(
+  paste("y ~", paste(AIC_predictors, collapse = " + "))
 )
-# Fit the GAM 
-gam_model <- gam(gam_formula, data = data_train)
-summary(gam_model)
+k_fold_cv_linear_model(lm_AIC_formula, data_train)
+check_multicollinearity(lm_AIC, data_train)
+# Diagnostics
+par(mfrow = c(2, 2))
+plot(lm_AIC)
 
+anova(lm_AIC)
 
-### ALL MODEL
-num_id <- sapply(data_train, is.numeric)
-num_vars <- setdiff(names(data_train)[num_id], "y")
-num_vars
-cat_vars <- names(data_train)[!num_id]
-cat_vars
+### Modeling: Interactions =====================================================
 
-total_lm_formula <- as.formula(
-  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", "*", "(", paste(cat_vars, collapse = " + "), ")" )
-)
-total_lm_model = lm(total_lm_formula,data = data_train)
-summary(total_lm_model)
-
-total_lm_AIC <- stepAIC(total_lm_model, direction = 'both')
-summary(total_lm_AIC)
-save(total_lm_AIC, file = "Modelos Nico/total_lm_AIC.RData")
-load("Modelos Nico/total_lm_AIC.RData")
-total_AIC_predictors <- labels(terms(total_lm_AIC))
-total_AIC_interactions = total_AIC_predictors[34:length(total_AIC_predictors)]
-
-
+## Directly from BIC -----------------------------------------------------------
+BIC_predictors <- labels(terms(lm_BIC))
+num_BIC_predictors <- c(BIC_predictors[1:5], "log.sup.util") # Added log.sup.util bc we consider it to be important
+cat_BIC_predictors <- c(BIC_predictors[6:10], "tipo.casa") # Added tipo.casa bc we consider it to be important
+combinations1 <- expand.grid(num_BIC_predictors, cat_BIC_predictors)
+inter_new1 <- paste(combinations1$Var1, combinations1$Var2, sep = ":")
 # Create plots for each interaction
-plots <- lapply(total_AIC_interactions, function(interaction) {
+plots <- lapply(inter_new1, function(interaction) {
   # Split the interaction into individual variables
   vars <- unlist(strsplit(interaction, ":"))
   
@@ -206,129 +427,126 @@ plots <- lapply(total_AIC_interactions, function(interaction) {
          x = vars[1], y = "y") +
     theme_minimal()
 })
-### Exponential Tryout
-plots_exp <- lapply(total_AIC_interactions, function(interaction) {
+m=1
+plots[[m]];m=m+1
+
+inter_preselected <- c("log.sup.util:comercial", "radius:tipo.casa", 
+                       "latitud:tipo.casa", "log.sup.util:ascensor", 
+                       "ref.hip.zona:banos", "log.sup.util:banos")
+# Create plots for each interaction
+plots <- lapply(inter_selected, function(interaction) {
   # Split the interaction into individual variables
   vars <- unlist(strsplit(interaction, ":"))
   
-  # Fit the linear model with interaction
-  formula <- as.formula(paste("y ~", paste(vars, collapse = "*")))
-  model <- lm(formula, data = data_train)
-  
-  # Create a new data frame with all combinations of unique values of vars[1] and vars[2]
-  pred_data <- expand.grid(
-    var1 = unique(data_train[[vars[1]]]),
-    var2 = unique(data_train[[vars[2]]])
-  )
-  names(pred_data) = c(as.name(vars[1]), as.name(vars[2]))
-  
-  # Add the predicted values
-  pred_data$predicted <- exp(predict(model, newdata = pred_data))
-  
-  # Plot
-  ggplot(data_train, aes(x = !!as.name(vars[1]), y = exp(y), color = !!as.name(vars[2]))) +
-    geom_point(alpha = 0.25) +  # Set the transparency level for points
-    geom_line(data = pred_data, 
-              aes(x = !!as.name(vars[1]), y = predicted, color = factor(!!as.name(vars[2]))),  # Ensure 'var2' is a factor for color mapping
-              linewidth = 1) +  # Make the geom_smooth more noticeable
+  ggplot(data_train, aes(x = !!as.name(vars[1]), y = y, color = !!as.name(vars[2]))) +
+    geom_point(alpha = 0.25) +
+    geom_smooth(method = "lm", se = FALSE) +
     labs(title = paste("Interaction:", interaction),
-         x = vars[1], y = "exp(y)") +
+         x = vars[1], y = "y") +
     theme_minimal()
 })
+m=1
+plots[[m]];m=m+1
 
+inter_selected <- c("log.sup.util:comercial")
 
-# BIC
-n <- 736
-total_lm_BIC <- stepAIC(total_lm_model, direction = 'both', k = log(n))
-summary(total_lm_BIC)
-# check_multicollinearity(total_lm_BIC, data = data_train)
-# Doesn't work with interactions !!!!!!!
-# total_predictors <- labels(terms(total_lm_BIC))
-# total_nums <- total_predictors[1:11]
-# total_cats <- total_predictors[12:16]
-# half_total_lm_formula <- as.formula(
-#   paste("y ~", "(", paste(total_nums, collapse = " + "), ")", "+", "(", paste(total_cats, collapse = " + "), ")" )
-# )
-# half_total_lm_model = lm(half_total_lm_formula,data = data_train)
-# summary(half_total_lm_model)
-# check_multicollinearity(half_total_lm_model, data = data_train)
-# CN = 18.92 MUY ALTO
-save(total_lm_BIC, file = "Modelos Nico/total_lm_BIC.RData")
-load("Modelos Nico/total_lm_BIC.RData")
-total_predictors <- labels(terms(total_lm_BIC))
-total_nums <- total_predictors[1:11]
-total_cats <- total_predictors[12:16]
-total_interacts <- total_predictors[17:26]
-
-total_gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", total_nums, ", bs='ps', m = 3)"), total_cats, total_interacts), collapse = " + "))
+added_BIC_predictors <- c(num_BIC_predictors, cat_BIC_predictors, inter_selected)
+added_BIC_formula <- as.formula(
+  paste("y ~", paste(added_BIC_predictors, collapse = " + "))
 )
-# Fit the GAM 
-total_gam_model <- gam(total_gam_formula, data = data_train)
-summary(total_gam_model)
+added_BIC_model = lm(added_BIC_formula, data_train)
+summary(added_BIC_model)
+anova(added_BIC_model)
+k_fold_cv_linear_model(added_BIC_formula, data_train)
+check_multicollinearity(added_BIC_model, data_train)
 
-### OJO eliminar variabels potencailmente correladas???
+
+## Directly from AIC -----------------------------------------------------------
+AIC_predictors <- labels(terms(lm_AIC))
+num_AIC_predictors <- AIC_predictors[1:9]
+cat_AIC_predictors <- AIC_predictors[10:16]
+combinations1 <- expand.grid(num_AIC_predictors, cat_AIC_predictors)
+inter_new1 <- paste(combinations1$Var1, combinations1$Var2, sep = ":")
 
 
-
-### ALL INTERACTIONS (WORSE TAHN THE PREVIOUS SECTION AAAAAAAAAAAAAAA)
-
-num_id <- sapply(data_train, is.numeric)
-num_vars <- setdiff(names(data_train)[num_id], "y")
-num_vars
-cat_vars <- names(data_train)[!num_id]
-cat_vars
-
-interact_lm_formula <- as.formula(
-  paste("y ~", "(", paste(num_vars, collapse = " + "), ")", ":", "(", paste(cat_vars, collapse = " + "), ")" )
+added_AIC_predictors <- c(num_AIC_predictors, cat_AIC_predictors, inter_new1)
+added_AIC_formula <- as.formula(
+  paste("y ~", paste(added_AIC_predictors, collapse = " + "))
 )
-interact_lm_model = lm(interact_lm_formula,data = data_train)
-summary(interact_lm_model)
+added_AIC_model = lm(added_AIC_formula, data_train)
+summary(added_AIC_model)
+anova(added_AIC_model)
+k_fold_cv_linear_model(added_AIC_formula, data_train)
+check_multicollinearity(added_AIC_model, data_train)
 
-interact_lm_BIC <- stepAIC(interact_lm_model, direction = 'both', k = log(n))
-summary(interact_lm_BIC)
+## Apply BIC to the new model to make it sparser
+sparse_AIC_model = stepAIC(added_AIC_model, direction = 'both', k = log(736))
+summary(sparse_AIC_model)
+k_fold_cv_linear_model(sparse_AIC_model, data_train)
 
-# Save the model to a file and load it
-save(interact_lm_BIC, file = "Modelos Nico/interact_lm_BIC.RData")
-load("Modelos Nico/interact_lm_BIC.RData")
-interact_predictors <- labels(terms(interact_lm_BIC))
 
-### Full lm model BIC vars
-predictors <- labels(terms(lm_BIC))
-num_id <- sapply(data_train[predictors], is.numeric)
-num_vars <- names(data_train[predictors])[num_id]
-cat_vars <- names(data_train[predictors])[!num_id]
-interact_predictors <- labels(terms(interact_lm_BIC))
-
-full_lm_formula <- as.formula(
-  paste("y ~", paste(c(num_vars, cat_vars, interact_predictors), collapse = " + "))
+# Call the final lm models =====================================================
+## Model 1 --- Manual selection after BIC --------------------------------------
+final_lm1_predictors <- added_BIC_predictors
+final_lm1_formula <- as.formula(
+  paste("y ~", paste(final_lm1_predictors, collapse = " + "))
 )
-full_lm_model = lm(full_lm_formula,data = data_train)
-summary(full_lm_model)
-# BIC
-full_lm_BIC <- stepAIC(full_lm_model, direction = 'both', k = log(n))
-summary(full_lm_BIC)
-# AIC
-full_lm_AIC <- stepAIC(full_lm_model, direction = 'both', k = 2)
-summary(full_lm_AIC)
+final_lm1_model = lm(final_lm1_formula, data_train)
+save(final_lm1_model, file = "Modelos Nico/final_lm1_model.RData")
+load("Modelos Nico/final_lm1_model.RData")
 
+summary(final_lm1_model)
+anova(final_lm1_model)
+k_fold_cv_linear_model(final_lm1_model, data_train)
+check_multicollinearity(final_lm1_model, data_train)
+# Diagnostics
+par(mfrow = c(2, 2))
+plot(final_lm1_model)
 
-full_gam_formula <- as.formula(
-  paste("y ~", paste(c(paste0("s(", num_vars, ", bs='ps', m = 3)"), cat_vars, interact_predictors), collapse = " + "))
+## Model 2 --- Sparse AIC after interacting ------------------------------------
+final_lm2_predictors <- c(labels(terms(sparse_AIC_model))[1:11], c("dorm"), 
+                          labels(terms(sparse_AIC_model))[11:16]) # Added dorm bc it seemed important
+final_lm2_formula <- as.formula(
+  paste("y ~", paste(final_lm2_predictors, collapse = " + "))
 )
-# Fit the GAM 
-full_gam_model <- gam(full_gam_formula, data = data_train)
-summary(full_gam_model)
+final_lm2_model = lm(final_lm2_formula, data_train)
+save(final_lm2_model, file = "Modelos Nico/final_lm2_model.RData")
+load("Modelos Nico/final_lm2_model.RData")
 
-# After - BIC GAM formula
-predictors <- labels(terms(full_lm_BIC))
-std_num_predictors <- predictors[1:4]
-std_cat_predictors <- predictors[5:10]
-interact_predictors <- predictors[11:13]
-full_gam_formula_BIC <- as.formula(
-  paste("y ~", paste(c(paste0("s(", std_num_predictors, ", bs='ps', m = 3)"),std_cat_predictors, interact_predictors), collapse = " + "))
-)
-# Fit the GAM 
-full_gam_model_BIC <- gam(full_gam_formula_BIC, data = data_train)
-summary(full_gam_model_BIC)
+summary(final_lm2_model)
+anova(final_lm2_model)
+k_fold_cv_linear_model(final_lm2_model, data_train)
+check_multicollinearity(final_lm2_model, data_train)
+# Diagnostics
+par(mfrow = c(2, 2))
+plot(final_lm2_model)
+
+
+########################### GAM Models #########################################
+## Model 1 --- Manual selection after BIC --------------------------------------
+final_gam1_predictors <- final_lm1_predictors
+num_final_gam1_predictors <- final_gam1_predictors[1:6]
+cat_final_gam1_predictors <- final_gam1_predictors[7:12]
+inter_final_gam1_predictors <- final_gam1_predictors[13]
+# We will omit latitud and radius and consider a bi-dimensional smooth term
+# based in latitud and longitud.
+#log.sup.util will be implemented through the interaction
+num_final_gam1_predictors <- setdiff(num_final_gam1_predictors, c("latitud", "radius", "log.sup.util"))
+
+final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 20, bs = 'ps') +
+                          s(Poca_limp, k = 20, bs = 'ps') +
+                          s(Pocas_zonas, k = 20, bs = 'ps') +
+                          s(log.sup.util, k = 20, bs = 'ps', by = comercial) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam1_model)
+
+
+
+
 
