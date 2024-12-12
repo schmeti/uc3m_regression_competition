@@ -553,21 +553,23 @@ save(final_gam1_model, file = "Modelos Nico/final_gam1_model.RData")
 load("Modelos Nico/final_gam1_model.RData")
 
 ## Model 2 --- Manual selection after BIC --------------------------------------
-final_gam2_model <- gam(y ~ s(latitud, k = 20, bs = 'ps') +
+final_gam2_model <- gam(y ~ latitud +
                           s(ref.hip.zona, k = 15, bs = 'ps') +
-                          s(Poca_limp, k = 15, bs = 'ps') +
+                          Poca_limp +
                           s(Pocas_zonas, k = 15, bs = 'ps') +
-                          s(radius, k = 20, bs = 'ps') +
-                          s(log.sup.util, k = 15, bs = 'ps', by = comercial) +
+                          radius +
+                          log.sup.util +
                           dorm + 
                           banos +
                           ascensor +
                           estado +
                           comercial +
-                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+                          tipo.casa +
+                          log.sup.util:comercial, method = "REML", data=data_train, select=FALSE)
 summary(final_gam2_model)
 save(final_gam2_model, file = "Modelos Nico/final_gam2_model.RData")
 load("Modelos Nico/final_gam2_model.RData")
+k_fold_cv_gam_model(final_gam2_model, data_train)
 
 ## Model 3 ----------- Sparse AIC + Tensorial geospace -------------------------
 final_lm2_predictors
@@ -611,7 +613,7 @@ summary(final_gam4_model)
 save(final_gam4_model, file = "Modelos Nico/final_gam4_model.RData")
 load("Modelos Nico/final_gam4_model.RData")
 
-
+## Best GAM ====================================================================
 ## The best (a priori) model is Model 4 ---> Let's linearize those terms which have
 ## edf < 2 : latitud, antig, poca_limp , radius and log.sup.util:banos
 ## The kept smooth terms are ref.hip.zonas and Pobl.0_14_div_Poblac.Total:tipo.casa
@@ -633,3 +635,73 @@ summary(final_gam_model)
 save(final_gam_model, file = "Modelos Nico/final_gam_model.RData")
 load("Modelos Nico/final_gam_model.RData")
 
+## Cross-Validation for GAMs
+fit_gam_model = function(formula, data_train){
+  formula <- as.formula(formula)
+  model = gam(formula, method = "REML", data = data_train, select=TRUE)
+  summary(model)
+  return(model)
+}
+
+
+
+fit_gam_model(final_gam_model, data_train)
+
+k_fold_cv_gam_model <- function(model_formula, 
+                                data_train,
+                                k=4){
+  cat("=== Running k_fold Cross Validation --- GAM === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_y <- numeric(k)
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_logy <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj_logy <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_gam_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # RsqAdj in log(y)
+    n_test = nrow(temp_test)
+    num_predictors = length(coefficients(temp_model)) 
+    
+    SSE = sum((temp_test$y - temp_predictions)^2)
+    SST = sum((mean(temp_test$y) - temp_test$y)^2)
+    
+    cv_rsq_adj_logy[i] = 1 - (SSE/(n_test-num_predictors))/(SST/(n_test-1))
+    
+    # RMSE in log(y)
+    cv_rmse_logy[i] <- sqrt(SSE/n_test)
+    
+    # RMSE in y
+    SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    cv_rmse_y[i] <- sqrt(SSE_exp/n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse_y=cv_rmse_y,
+              mean_cv_rmse_y = mean(cv_rmse_y),
+              cv_rmse_logy=cv_rmse_logy,
+              mean_cv_rmse_logy = mean(cv_rmse_logy),
+              cv_rsq_adj_logy=cv_rsq_adj_logy,
+              mean_cv_rsq_adj_logy = mean(cv_rsq_adj_logy)
+  ))
+}
+
+k_fold_cv_gam_model(final_gam_model, data_train)
+
+plot(final_gam_model, se = 2, shade =TRUE, resid = TRUE, pages = 1)
