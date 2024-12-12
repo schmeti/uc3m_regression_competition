@@ -495,6 +495,8 @@ final_lm1_model = lm(final_lm1_formula, data_train)
 save(final_lm1_model, file = "Modelos Nico/final_lm1_model.RData")
 load("Modelos Nico/final_lm1_model.RData")
 
+final_lm1_predictors <- labels(terms(final_lm1_model))
+
 summary(final_lm1_model)
 anova(final_lm1_model)
 k_fold_cv_linear_model(final_lm1_model, data_train)
@@ -513,6 +515,8 @@ final_lm2_model = lm(final_lm2_formula, data_train)
 save(final_lm2_model, file = "Modelos Nico/final_lm2_model.RData")
 load("Modelos Nico/final_lm2_model.RData")
 
+final_lm2_predictors <- labels(terms(final_lm2_model))
+
 summary(final_lm2_model)
 anova(final_lm2_model)
 k_fold_cv_linear_model(final_lm2_model, data_train)
@@ -523,7 +527,7 @@ plot(final_lm2_model)
 
 
 ########################### GAM Models #########################################
-## Model 1 --- Manual selection after BIC --------------------------------------
+## Model 1 --- Manual selection after BIC + Tensorial geospace -----------------
 final_gam1_predictors <- final_lm1_predictors
 num_final_gam1_predictors <- final_gam1_predictors[1:6]
 cat_final_gam1_predictors <- final_gam1_predictors[7:12]
@@ -533,11 +537,11 @@ inter_final_gam1_predictors <- final_gam1_predictors[13]
 #log.sup.util will be implemented through the interaction
 num_final_gam1_predictors <- setdiff(num_final_gam1_predictors, c("latitud", "radius", "log.sup.util"))
 
-final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps')) +
-                          s(ref.hip.zona, k = 20, bs = 'ps') +
-                          s(Poca_limp, k = 20, bs = 'ps') +
-                          s(Pocas_zonas, k = 20, bs = 'ps') +
-                          s(log.sup.util, k = 20, bs = 'ps', by = comercial) +
+final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(20,20), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pocas_zonas, k = 15, bs = 'ps') +
+                          s(log.sup.util, k = 15, bs = 'ps', by = comercial) +
                           dorm + 
                           banos +
                           ascensor +
@@ -545,8 +549,64 @@ final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps
                           comercial +
                           tipo.casa, method = "REML", data=data_train, select=FALSE)
 summary(final_gam1_model)
+save(final_gam1_model, file = "Modelos Nico/final_gam1_model.RData")
+load("Modelos Nico/final_gam1_model.RData")
+
+## Model 2 --- Manual selection after BIC --------------------------------------
+final_gam2_model <- gam(y ~ s(latitud, k = 20, bs = 'ps') +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pocas_zonas, k = 15, bs = 'ps') +
+                          s(radius, k = 20, bs = 'ps') +
+                          s(log.sup.util, k = 15, bs = 'ps', by = comercial) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam2_model)
+save(final_gam2_model, file = "Modelos Nico/final_gam2_model.RData")
+load("Modelos Nico/final_gam2_model.RData")
+
+## Model 3 ----------- Sparse AIC + Tensorial geospace -------------------------
+final_lm2_predictors
+# we disregard Pobl.0_14_div_Poblac.Total:comercial, tipo casa is more significant
+# and log.sup.util:comercial, banos is more significant
+final_gam3_model <- gam(y ~ te(latitud, longitud, k = c(20,20), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(antig, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pobl.0_14_div_Poblac.Total, k = 15, bs = 'ps', by = tipo.casa) +
+                          s(log.sup.util, k = 15, bs = 'ps', by = banos) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam3_model)
+save(final_gam3_model, file = "Modelos Nico/final_gam3_model.RData")
+load("Modelos Nico/final_gam3_model.RData")
 
 
-
-
-
+## Model 4 ----------- Sparse AIC ----------------------------------------------
+final_lm2_predictors
+# we disregard Pobl.0_14_div_Poblac.Total:comercial, tipo casa is more significant
+# and log.sup.util:comercial, banos is more significant
+final_gam4_model <- gam(y ~ s(latitud, k = 20, bs = 'ps') +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(antig, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pobl.0_14_div_Poblac.Total, k = 15, bs = 'ps', by = tipo.casa) +
+                          s(radius, k = 20, bs = 'ps') +
+                          s(log.sup.util, k = 15, bs = 'ps', by = banos) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam4_model)
+save(final_gam4_model, file = "Modelos Nico/final_gam4_model.RData")
+load("Modelos Nico/final_gam4_model.RData")
