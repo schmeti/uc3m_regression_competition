@@ -497,7 +497,7 @@ load("Modelos Nico/final_lm1_model.RData")
 
 summary(final_lm1_model)
 anova(final_lm1_model)
-k_fold_cv_linear_model(final_lm1_formula, data_train)
+k_fold_cv_linear_model(final_lm1_model, data_train)
 check_multicollinearity(final_lm1_model, data_train)
 # Diagnostics
 par(mfrow = c(2, 2))
