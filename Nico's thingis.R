@@ -610,3 +610,26 @@ final_gam4_model <- gam(y ~ s(latitud, k = 20, bs = 'ps') +
 summary(final_gam4_model)
 save(final_gam4_model, file = "Modelos Nico/final_gam4_model.RData")
 load("Modelos Nico/final_gam4_model.RData")
+
+
+## The best (a priori) model is Model 4 ---> Let's linearize those terms which have
+## edf < 2 : latitud, antig, poca_limp , radius and log.sup.util:banos
+## The kept smooth terms are ref.hip.zonas and Pobl.0_14_div_Poblac.Total:tipo.casa
+final_gam_model <- gam(y ~ latitud +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          antig+
+                          Poca_limp +
+                          s(Pobl.0_14_div_Poblac.Total, k = 15, bs = 'ps', by = tipo.casa) +
+                          radius+
+                          log.sup.util +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa + 
+                          log.sup.util:banos, method = "REML", data=data_train, select=FALSE)
+summary(final_gam_model)
+save(final_gam_model, file = "Modelos Nico/final_gam_model.RData")
+load("Modelos Nico/final_gam_model.RData")
+
