@@ -510,12 +510,12 @@ final_lm2_formula <- as.formula(
   paste("y ~", paste(final_lm2_predictors, collapse = " + "))
 )
 final_lm2_model = lm(final_lm2_formula, data_train)
-save(final_lm1_model, file = "Modelos Nico/final_lm2_model.RData")
+save(final_lm2_model, file = "Modelos Nico/final_lm2_model.RData")
 load("Modelos Nico/final_lm2_model.RData")
 
 summary(final_lm2_model)
 anova(final_lm2_model)
-k_fold_cv_linear_model(final_lm2_formula, data_train)
+k_fold_cv_linear_model(final_lm2_model, data_train)
 check_multicollinearity(final_lm2_model, data_train)
 # Diagnostics
 par(mfrow = c(2, 2))
