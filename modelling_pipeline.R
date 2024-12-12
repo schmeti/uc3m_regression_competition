@@ -362,28 +362,28 @@ preprocess = function(data){
     )
   data$estado <- factor(data$estado, levels = unique(data$estado))
   
-  
+
   data <- data %>%
     mutate(
       distrito = case_when(
         # South Districts
         distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
-        
+
         # Central Districts
         distrito %in% c("carabanchel", "latina") ~ "South West",
-        
+
         # North Districts
         distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "South East",
-        
+
         # West Districts
         distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "North East",
-        
+
         # Default to original values if no match
         TRUE ~ as.character(distrito)
       )
     )
   data$distrito <- factor(data$distrito, levels = unique(data$distrito))
-  
+
   # Unifying the numeric gases variables into a single dichotomic 'polluted'
   n <- 736
   pollutants <- c("CO", "NO2", "Nox", "O3", "SO2", "PM10")
@@ -537,7 +537,6 @@ run_pipeline = function(data_train,
   
   # preprocess data
   data_train_processed = preprocess(data = data_train)
-  data_test_processed = preprocess(data = data_test)
   cat("Preprocessing -- DONE\n")
   
   
@@ -571,6 +570,8 @@ run_pipeline = function(data_train,
   
   # predict
   if (!is.null(predict_and_write_path) && predict_and_write_path != "") {
+    data_test_processed = preprocess(data = data_test)
+    
     predict_and_write(data_test_processed, model,path=predict_and_write_path)
     cat("Writing Predictions to excel -- DONE\n")
   }
@@ -589,17 +590,16 @@ run_pipeline = function(data_train,
 }
 
 ################################################################################
-
 ### run
 data_train <- read_excel("Data/data_train.xlsx")
-data_test <- read_excel("Data/data_test_tryout.xlsx")
+#data_test <- read_excel("Data/data_test_tryout.xlsx")
 
 run_pipeline(data_train=data_train,
              data_test=data_test,
-             load_model_path="Modelos Nico 3/total_lm_BIC.RData",
+             #load_model_path="Modelos Nico 3/total_lm_BIC.RData",
              store_model = FALSE,
-             predict_and_write_path = "Data/predicted_prices.xlsx",
-             #model_formula = y ~ .,
+             #predict_and_write_path = "Data/predicted_prices.xlsx",
+             model_formula = y ~ distrito,
              )
 
 
