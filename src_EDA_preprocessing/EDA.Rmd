@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(readxl)
-data_train <- read_excel("Data/data_train.xlsx")
+data_train <- read_excel("C:/GitHub/uc3m_regression_competition/Data/data_train.xlsx")
 ```
 
 ```{r}
@@ -201,37 +201,53 @@ corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper",
 
 
 ```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
-# # Install and load necessary packages
-# library(reshape2)
-# library(ggplot2)
-# library(GGally) # This is required for ggpairs
-# 
-# # Compute correlation matrix
-# numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
-# corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
-# melted_corr_mat <- melt(corr_mat)
-# 
-# # Plot correlation heatmap
-# ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
-#   geom_tile() +
-#   geom_text(aes(label = value), color = "black", size = 4)+
-#   scale_fill_gradient(low = "white", high = "red") +
-#   theme_minimal()
-# 
+# Install and load necessary packages
+library(reshape2)
+library(ggplot2)
+library(GGally) # This is required for ggpairs
+
+# Compute correlation matrix
+numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
+corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
+# Perform hierarchical clustering on the correlation matrix
+hc <- hclust(as.dist(1 - corr_mat))  # Clustering based on correlation distance
+ordered_corr_mat <- corr_mat[hc$order, hc$order]  # Order rows and columns by cluster
+
+# Melt the ordered correlation matrix for ggplot
+melted_corr_mat <- melt(ordered_corr_mat)
+
+# Plot correlation heatmap
+p <- ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "black") +
+  scale_fill_gradient2(low = "dodgerblue4", mid = "white", high = "#B22222", midpoint = 0) +  # Gradient from blue to red
+  theme_minimal() +
+  labs(fill = "Correlation") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 15, face = "bold"),  # Larger x-axis labels
+    axis.text.y = element_text(size = 15, face = "bold"),  # Larger y-axis labels
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    plot.title = element_text(size = 24, face = "bold", hjust = 0.5)  # Bigger plot title
+  )
+
+plot(p)
+ggsave("C:/GitHub/uc3m_regression_competition/Plots/EDA/Matriz de correlaciones.jpg",
+       plot = p, width = 10, height = 10, units = "in", dpi = 300)
+
 # library(ggcorrplot)
 # p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
-#                hc.order = TRUE) + 
-#   theme(axis.text.x = element_text(size = 7)) + 
+#                hc.order = TRUE) +
+#   theme(axis.text.x = element_text(size = 7)) +
 #   theme(axis.text.y = element_text(size = 7))
 # # ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10,
-# #        units = "in", dpi = 300) 
+# #        units = "in", dpi = 300)
 # 
 # 
 # # Pairplot using ggpairs
 # ggpairs(data_train[, numeric_column_names])
 # 
 # 
-# library(lsr) 
+# library(lsr)
 # cramersV(data_train$dorm, data_train$banos)
 # 
 # # Initialize a results matrix
@@ -243,7 +259,7 @@ corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper",
 #   for (j in (i):length(cat.var)) {
 #     var1 <- cat.var[i]
 #     var2 <- cat.var[j]
-#     
+# 
 #     # Calculate Cramér's V
 #     cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
 #     cram_results[j, i] <- cram_results[i, j]  # Symmetric
