@@ -1,0 +1,662 @@
+---
+title: "regression_competition"
+output: html_document
+date: "2024-11-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Map of Madrid with points and color indicating prizes
+
+```{r}
+library(readxl)
+data_train <- read_excel("Data/data_train.xlsx")
+```
+
+```{r}
+#install.packages(c("ggplot2", "sf", "dplyr"))
+
+# Load libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(GGally)
+library(knitr)
+library(kableExtra)
+library(geosphere)
+library(gridExtra)
+
+
+
+```
+# Exploratory Analysis
+
+
+| **Category** | **Variable**                | **Description**                                                                                                     |
+|--------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------|
+| Continuous   | precio.house.m2             | Property sale price in euros per square meter                                                                      |
+|              | antig                       | Age of the property (years)                                                                                        |
+|              | Ruidos_ext                  | External noise (%)                                                                                                 |
+|              | Mal_olor                    | Pollution or bad odors (%)                                                                                         |
+|              | Poca_limp                   | Lack of street cleanliness (%)                                                                                     |
+|              | Malas_comunic               | Poor communications (%)                                                                                            |
+|              | Pocas_zonas                 | Few green spaces (%)                                                                                               |
+|              | Delincuencia                | Crime (%)                                                                                                          |
+|              | CO                          | Level of CO in the air at the property's coordinates (standardized values)                                         |
+|              | NO2                         | Level of NO2 in the air at the property's coordinates (standardized values)                                        |
+|              | Nox                         | Level of Nox in the air at the property's coordinates (standardized values)                                        |
+|              | O3                          | Level of O3 in the air at the property's coordinates (standardized values)                                         |
+|              | SO2                         | Level of SO2 in the air at the property's coordinates (standardized values)                                        |
+|              | PM10                        | Level of CO in the air at the property's coordinates (standardized values)                                         |
+|              | Pobl.0_14_div_Poblac.Total  | Percentage of children between 0 and 14 years in the district                                                     |
+|              | PoblJubilada_div_Poblac.Total | Percentage of retired population in the district                                                                 |
+|              | Inmigrantes.porc            | Percentage of immigrant population in the district                                                                |
+|              | sup.const                   | Built area of the property                                                                                        |
+|              | sup.util                    | Usable area of the property                                                                                       |
+| Categorical  | barrio/cod_barrio           | Code or name of the neighborhood in the city of Madrid                                                            |
+|              | distrito/cod_distrito       | Code or name of the district in the city of Madrid                                                                |
+|              | longitud/latitud            | Geographical coordinates of the property (longitude and latitude)                                                 |
+|              | dorm                        | Number of bedrooms                                                                                                |
+|              | banos                       | Number of bathrooms                                                                                               |
+|              | tipo.casa                   | Type of property                                                                                                  |
+|              | estado                      | Condition of the property                                                                                         |
+| Binary       | inter.exter                 | Interior or exterior design of the property                                                                       |
+|              | ascensor                    | Elevator availability in the building                                                                             |
+|              | comercial                   | Indicates if the property is located in a commercial area                                                         |
+|              | casco.historico             | Indicates if the property is in Madrid's historic center                                                          |
+|              | M.30                        | Indicates if the property is within the M-30                                                                      |
+| Identifier   | ref.hip.zona                | Mortgage reference of the area                                                                                    |
+|              | train_indices               | ID of the observation                                                                                              |
+
+```{r}
+colnames(data_train)
+```
+
+
+```{r}
+# turn identifiers into strings to prevent errors
+
+# data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona ", "casco.historico", "M.30","comercial")] <- lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona", "casco.historico", "M.30","comercial")], as.character)
+
+data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona")] = lapply(data_train[, c("train_indices", "cod_barrio", "cod_distrito", "ref.hip.zona")], as.character)
+
+cat.var = c("dorm", "banos", "tipo.casa", "inter.exter", "ascensor", "comercial",
+            "casco.historico", "M.30")
+data_train[, c(cat.var, "barrio", "distrito")] =
+  lapply(data_train[, c(cat.var, "barrio", "distrito")], as.factor)
+
+num_id <- sapply(data_train, is.numeric)
+num_vars <- names(data_train)[num_id]
+```
+
+```{r}
+unique_counts <- data.frame(
+  Column = names(data_train),
+  Unique_Values = sapply(data_train, function(x) length(unique(x)))
+)
+unique_counts
+```
+
+```{r}
+summary(data_train)
+```
+
+## Frequency Analysis
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+
+plot_hist = function(data_train, type = "both", n, m) {
+
+  # Configure subplots
+  par(mfrow = c(n, m),mar = c(10, 4, 4, 1))
+  
+  # Loop through columns
+  for (col in colnames(data_train)) {
+    # plot numeric columns
+    if (is.numeric(data_train[[col]]) && (type == "numeric" || type == "both")) {
+      
+      # Create histograms
+      hist(data_train[[col]], 
+           main = paste(col), 
+           xlab = "",
+           col = "dodgerblue4")
+      
+      # plot non-numeric columns
+    } else if (!is.numeric(data_train[[col]]) && (type == "categoric" 
+                                            || type == "both")) {
+      # Adjust x-axis label arrangement for specific cols
+      barplot(table(data_train[[col]]), 
+              main = paste(col), 
+              xlab = "", 
+              col = "dodgerblue",
+              las = 2)
+    }
+  }
+  
+  # Reset the plotting layout
+  par(mfrow = c(1, 1))
+}
+
+```
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+# Numeric hist
+plot_hist(data = data_train ,type="numeric", n=3, m=2)
+```
+
+```{r, fig.width=8.27, fig.height=10, out.width='100%'}
+# Numeric hist
+plot_hist(data = data_train ,type="categoric", n=3, m=2)
+```
+TODO: Conditional histograms for categoricals (barrios)
+```{r warning=FALSE,fig.width=12, fig.height=6, out.width='100%'}
+# Compute correlation matrix
+# Convert Categorical Variables to Numeric Using Label Encoding
+data_encoded <- data_train %>%
+  mutate(across(where(is.character), ~ as.numeric(factor(.))))
+
+
+numeric_columns <- data_encoded[, sapply(data_encoded, is.numeric)]
+
+# Compute the correlation matrix
+correlations <- cor(numeric_columns)
+
+# Check if 'precio.house.m2' exists
+if ("precio.house.m2" %in% colnames(correlations)) {
+  # Extract the row corresponding to 'precio.house.m2'
+  price_per_sqm_corr <- correlations["precio.house.m2", ]
+  
+  # Convert to data frame for plotting
+  price_per_sqm_corr_df <- data.frame(
+    Variable = names(price_per_sqm_corr),
+    Correlation = price_per_sqm_corr
+  )
+  
+  # Plot the correlations
+  library(ggplot2)
+  ggplot(price_per_sqm_corr_df, aes(x = reorder(Variable, Correlation), y = Correlation)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() + # Flip coordinates for easier readability
+    theme_minimal() +
+    labs(
+      title = "Correlation with price_per_sqm",
+      x = "Variable",
+      y = "Correlation"
+    )
+} else {
+  stop("precio.house.m2 not found in correlation matrix.")
+}
+
+```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+library(corrplot)
+# Plot
+corrplot(correlations, method = "circle", addCoef.col = "black", type = "upper", 
+         order = "hclust", tl.col = "black", tl.srt = 45)
+```
+
+
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+# # Install and load necessary packages
+# library(reshape2)
+# library(ggplot2)
+# library(GGally) # This is required for ggpairs
+# 
+# # Compute correlation matrix
+# numeric_column_names <- names(data_train)[sapply(data_train, is.numeric)]
+# corr_mat <- round(cor(data_train[, numeric_column_names]), 2)
+# melted_corr_mat <- melt(corr_mat)
+# 
+# # Plot correlation heatmap
+# ggplot(data = melted_corr_mat, aes(x = Var2, y = Var1, fill = value)) + 
+#   geom_tile() +
+#   geom_text(aes(label = value), color = "black", size = 4)+
+#   scale_fill_gradient(low = "white", high = "red") +
+#   theme_minimal()
+# 
+# library(ggcorrplot)
+# p <- ggcorrplot(corr_mat, title = "Matriz de correlaciones",ggtheme = ggplot2::theme_minimal(),
+#                hc.order = TRUE) + 
+#   theme(axis.text.x = element_text(size = 7)) + 
+#   theme(axis.text.y = element_text(size = 7))
+# # ggsave("Matriz de correlaciones.jpg", plot = p, width = 10, height = 10,
+# #        units = "in", dpi = 300) 
+# 
+# 
+# # Pairplot using ggpairs
+# ggpairs(data_train[, numeric_column_names])
+# 
+# 
+# library(lsr) 
+# cramersV(data_train$dorm, data_train$banos)
+# 
+# # Initialize a results matrix
+# cram_results <- matrix(NA, nrow = length(cat.var), ncol = length(cat.var),
+#                   dimnames = list(cat.var, cat.var))
+# 
+# # Loop through variable pairs
+# for (i in 1:(length(cat.var))) {
+#   for (j in (i):length(cat.var)) {
+#     var1 <- cat.var[i]
+#     var2 <- cat.var[j]
+#     
+#     # Calculate Cramér's V
+#     cram_results[i, j] <- cramersV(data_train[[var1]], data_train[[var2]])
+#     cram_results[j, i] <- cram_results[i, j]  # Symmetric
+#   }
+# }
+# 
+# # Convert to a heatmap-friendly format
+# print(cram_results)
+# 
+# # Melt results for heatmap
+# melted_results <- melt(cram_results, na.rm = TRUE)
+# 
+# # Plot heatmap
+# ggplot(melted_results, aes(Var1, Var2, fill = value)) +
+#   geom_tile(color = "white") +  # Add white borders for better contrast
+#   geom_text(aes(label = sprintf("%.2f", value)), size = 12, color = "black") +  # Larger text for values
+#   scale_fill_gradient(low = "white", high = "#CD5C5C", limits = c(0, 1)) +  # Adjust color scale
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_text(size = 20, angle = 45, hjust = 1),  # Larger x-axis labels
+#     axis.text.y = element_text(size = 20),  # Larger y-axis labels
+#     plot.title = element_text(size = 24, face = "bold", hjust = 0.5),  # Larger title
+#     legend.title = element_text(size = 18),  # Larger legend title
+#     legend.text = element_text(size = 16)  # Larger legend text
+#   ) +
+#   labs(title = "Cramér's V Heatmap", fill = "Cramér's V", x = "", y = "")
+
+```
+
+### Objective vs. Predictors
+
+In this part we will be creating scatterplots of the relation between the continuous predictors and their price.
+
+```{r, warning=FALSE}
+
+num_vars_2 = setdiff(num_vars, c("precio.house.m2"))#, "ref.hip.zona"))
+
+for (i in num_vars_2) {
+  
+  # Calculate R^2
+  fit <- lm(precio.house.m2 ~ data_train[[i]], data = data_train)
+  r_squared <- summary(fit)$r.squared
+  
+  # Create the plot
+  p <- ggplot(data = data_train, aes(x = data_train[[i]], y = precio.house.m2)) +
+    geom_point(color = "darkseagreen4", alpha = 0.6) +  # Scatter plot
+    geom_smooth(method = "lm", se = FALSE, color = "#FFAEB9") +  # Regression line
+    theme_bw() +
+    labs(
+      title = paste0("Variable:", i, " (R² = ", round(r_squared, 3), ")"),
+      x = i,
+      y = "precio.house.m2"
+    )
+  plot(p)
+}
+```
+
+We observe poor correlation between the objective value and the predictor features.
+
+### Categorical Values Selection
+
+Let's consider the relations that exist between the categorical values and the price of the flats
+
+```{r}
+
+# 
+# summary(data_train[cat.var])
+# 
+# # Define a function to calculate and display contingency tables with proportions
+# explore_categorical_interactions <- function(data, cat_vars) {
+#   for (i in 1:(length(cat_vars) - 1)) {
+#     for (j in (i + 1):length(cat_vars)) {
+#       var1 <- cat_vars[i]
+#       var2 <- cat_vars[j]
+#       
+#       # Create contingency table (frequencies)
+#       freq_table <- table(data[[var1]], data[[var2]])
+#       
+#       # Create proportion table
+#       prop_table <- 100*prop.table(freq_table) %>% round(4)
+#       
+#       # Combine frequency and proportion into one data frame
+#       combined_table <- cbind("Absolute:"= freq_table,
+#                               "Relative:" = prop_table)
+# 
+#       # Display using kableExtra
+#       cat("\n### Interaction Between", var1, "and", var2, "\n\n")
+#       combined_table %>% print()
+#     }
+#   }
+# }
+# 
+# 
+# explore_categorical_interactions(data_train, cat.var)
+```
+
+Now lets consider the interaction with the price
+
+```{r}
+# Define a function to create boxplots for price grouped by categorical variables
+plot_price_by_categories <- function(data, cat_vars, price_var) {
+  for (var in cat_vars) {
+    # Create the boxplot
+    p <- ggplot(data, aes_string(x = var, y = price_var)) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", price_var, "by", var),
+        x = var,
+        y = price_var
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+    
+    # Print the plot
+    print(p)
+  }
+}
+
+# Example usage
+plot_price_by_categories(data_train, cat.var, "precio.house.m2")
+```
+
+### Multivariate
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+average_price_per_barrio <- data_train %>%
+  group_by(barrio) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_barrio, aes(x = reorder(barrio, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by Barrio",
+       x = "Barrio",
+       y = "Average Price per 2m") +
+  theme_minimal()
+```
+
+```{r warning=FALSE,fig.width=20, fig.height=10, out.width='100%'}
+average_price_per_district <- data_train %>%
+  group_by(distrito) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by District",
+       x = "District",
+       y = "Average Price per 2m") +
+  theme_minimal()
+```
+
+
+
+```{r}
+# creacion de una nueva variable
+data_tr_new <- data_train
+data_tr_new$sup.const<-NULL
+library(geosphere)
+
+centro <- c(-3.6946, 40.4190)  # Longitude, Latitude
+data_tr_new$radio <- distHaversine(
+  cbind(data_tr_new$longitud, data_tr_new$latitud),
+  centro
+)
+# logarithmic objective
+data_tr_new$log.precio.house.m2 <- log(data_tr_new$precio.house.m2)
+numeric_column_names <- names(data_tr_new)[sapply(data_tr_new, is.numeric)]
+corr_mat <- round(cor(data_tr_new[, numeric_column_names]), 2)
+ggcorrplot(corr_mat, title = "Correlation Matrix",ggtheme = ggplot2::theme_minimal(),
+               hc.order = TRUE) + 
+  theme(axis.text.x = element_text(size = 7)) + 
+  theme(axis.text.y = element_text(size = 7))
+```
+```{r,  fig.width=30, fig.height=20, out.width='100%'}
+points_sf <- st_as_sf(data_tr_new, coords = c("longitud", "latitud"), crs = 4326)
+points_sf <- points_sf[order(points_sf$precio.house.m2), ]
+# Download the map of Madrid (use a simple shapefile, for example)
+madrid_map <- st_read("Data/madrid.geojson")
+# Central point (Puerta del Sol)
+center <- c(-3.7038, 40.4168)
+
+# Calculate distances and add a new column
+data_train$radius <- distHaversine(
+  matrix(c(data_train$longitud, data_train$latitud), ncol = 2),
+  matrix(rep(center, nrow(data_train)), ncol = 2, byrow = TRUE)
+) / 1000  # Convert meters to kilometers
+
+
+```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+create_district_map <- function(points_sf, madrid_map, color_column) {
+  column_data <- points_sf[[color_column]]
+  
+  ggplot() +
+    # Base map of Madrid
+    geom_sf(data = madrid_map, fill = "lightgray", color = "white") +
+    
+    # Points representing districts or other categories
+    geom_sf(data = points_sf, aes_string(color = color_column), size = 2, alpha = 0.8) +
+    
+    # Title and axis labels
+    labs(
+      x = "Longitude",
+      y = "Latitude",
+      color = color_column  # Dynamically set legend title
+    ) +
+    
+    # Improved theme with optimized margins
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      axis.title.x = element_text(size = 14), # Slightly larger axis titles
+      axis.title.y = element_text(size = 14),
+      axis.text.x = element_text(size = 12, angle = 30, hjust = 1), # Adjusted axis text size
+      axis.text.y = element_text(size = 12),
+      legend.title = element_text(size = 14),
+      legend.text = element_text(size = 12),
+      legend.key.size = unit(0.8, "cm"), # Adjust legend size slightly
+      panel.grid.major = element_line(color = "gray80", linetype = "dashed"),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(t = 5, r = 5, b = 5, l = 5) # Reduce white space
+    ) +
+    
+    # Dynamically select color scale based on column type
+    if (is.numeric(column_data) && length(unique(column_data)) > 10) {
+      scale_color_viridis_c(option = "turbo")  # Continuous
+    } else {
+      scale_color_viridis_d(option = "turbo")  # Discrete
+    }
+}
+
+
+
+# Directory to save the plots
+output_directory <- "Plots"  # Replace with your desired folder name
+
+# Create the directory if it doesn't exist
+if (!dir.exists(output_directory)) {
+  dir.create(output_directory)
+}
+
+# Loop through all columns in points_sf
+columns <- names(points_sf)
+columns <- setdiff(columns, c("train_indices", "geometry"))
+points_sf$ref.hip.zona <- as.numeric(points_sf$ref.hip.zona)
+
+for (col_name in columns) {
+  # Create the plot for the current column
+  plot <- create_district_map(points_sf, madrid_map, col_name)
+
+  # Save the plot as an image
+  file_name <- paste0(output_directory, "/", col_name, ".jpg")  # Create file name dynamically
+  ggsave(
+    filename = file_name,
+    plot = plot,
+    width = 12,    # Width of the image
+    height = 10,   # Height of the image
+    units = "in",  # Units for dimensions
+    dpi = 300      # Resolution
+  )
+}
+
+```
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+plot <- create_district_map(points_sf, madrid_map, "precio.house.m2")
+print(plot)
+```
+
+# Specific Questions Corner
+
+# lat/lon 
+
+
+```{r}
+
+# Install the package if not already installed
+if (!require("plotly")) install.packages("plotly")
+
+# Load the package
+library(plotly)
+
+# Create an interactive 3D scatterplot
+plot_ly(data = data_train, x = ~longitud, y = ~latitud, z = ~precio.house.m2, color = "precio.house.m2",
+        type = "scatter3d", 
+        mode = "markers", 
+        marker = list(size = 3, 
+                      color = ~precio.house.m2,  # Map z values to color
+                      colorscale = c("blue", "green", "yellow", "red"), # Color gradient
+                      colorbar = list(title = "Z-axis"))) %>%
+  layout(title = "3D Scatterplot",
+         scene = list(
+           xaxis = list(title = "Longitude"),
+           yaxis = list(title = "Latitude"),
+           zaxis = list(title = "Price per Sqm")))
+
+
+```
+
+
+
+## Grouping Barrio/Distrito
+
+```{r warning=FALSE,fig.width=30, fig.height=20, out.width='100%'}
+
+
+
+
+points_sf <- points_sf %>%
+    mutate(
+      distrito = case_when(
+        # South Districts
+        distrito %in% c("arganzuela" ,"centro", "chamartin", "chamberi", "moncloa", "retiro", "salamanca") ~ "Center",
+        
+        # Central Districts
+        distrito %in% c("carabanchel", "latina") ~ "South West",
+        
+        # North Districts
+        distrito %in% c("moratalaz", "puente_vallecas", "usera", "vallecas", "vicalvaro", "villaverde") ~ "South East",
+        
+        # West Districts
+        distrito %in% c("barajas","ciudad_lineal", "fuencarral", "hortaleza", "san_blas","tetuan") ~ "North East",
+        
+        # Default to original values if no match
+        TRUE ~ as.character(distrito)
+      )
+    )
+points_sf$distrito <- factor(points_sf$distrito, levels = unique(points_sf$distrito))
+
+
+plot <- create_district_map(points_sf, madrid_map, "distrito")
+print(plot)
+
+```
+
+
+```{r}
+# Unifying the numeric gases variables into a single dichotomic 'polluted'
+n <- 736
+pollutants <- c("CO", "NO2", "Nox", "O3", "SO2", "PM10")
+l <- length(pollutants)
+polluted <- matrix(0, nrow = n, ncol = l)
+for (i in 1:l){
+  var = pollutants[i]
+  threshold = quantile(points_sf[[var]], 0.75)    # Third quartile as threshold
+  polluted[,i] = (points_sf[[var]] > threshold)   # Indicate individuals with high concentration
+  points_sf[[var]] <- NULL                        # Erase the variable used
+}
+polluted_indivs <- apply(polluted, 1, sum)   # Sum by rows
+
+# We select those individuals with non-high values on EVERY gas variable as non-polluted
+# the rest will be considered polluted
+points_sf$polluted = factor(as.numeric(polluted_indivs != 0))
+
+
+plot <- create_district_map(points_sf, madrid_map, "polluted")
+print(plot)
+
+
+plot_price_by_categories(data_train, , "precio.house.m2")
+
+```
+```{r}
+p <- ggplot(points_sf, aes_string(x = "polluted", y = "precio.house.m2")) +
+      geom_boxplot(fill = "#69b3a2", color = "black", outlier.color = "red") +
+      theme_bw() +
+      labs(
+        title = paste("Boxplot of", "precio.house.m2", "by", var),
+        x = "polluted",
+        y = "precio.house.m2"
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+      )
+print(p)
+```
+
+
+```{r warning=FALSE,fig.width=20, fig.height=10, out.width='100%'}
+average_price_per_district <- data_train %>%
+  group_by(distrito) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_district, aes(x = reorder(distrito, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by District",
+       x = "District",
+       y = "Average Price per 2m") +
+  theme_minimal()
+
+
+average_price_per_barrio <- data_train %>%
+  group_by(barrio) %>%
+  summarise(average_price = mean(`precio.house.m2`, na.rm = TRUE))
+
+ggplot(average_price_per_barrio, aes(x = reorder(barrio, average_price), y = average_price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability if there are many barrios
+  labs(title = "Average Price per 2m by Barrio",
+       x = "Barrio",
+       y = "Average Price per 2m") +
+  theme_minimal()
+
+```
+
+
+
