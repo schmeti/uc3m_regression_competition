@@ -493,11 +493,13 @@ final_lm1_formula <- as.formula(
 )
 final_lm1_model = lm(final_lm1_formula, data_train)
 save(final_lm1_model, file = "Modelos Nico/final_lm1_model.RData")
-load("Modelos Nico/final_lm1_model.RData")
+load("Modelos/final_lm1_model.RData")
+
+final_lm1_predictors <- labels(terms(final_lm1_model))
 
 summary(final_lm1_model)
 anova(final_lm1_model)
-k_fold_cv_linear_model(final_lm1_formula, data_train)
+k_fold_cv_linear_model(final_lm1_model, data_train)
 check_multicollinearity(final_lm1_model, data_train)
 # Diagnostics
 par(mfrow = c(2, 2))
@@ -510,12 +512,14 @@ final_lm2_formula <- as.formula(
   paste("y ~", paste(final_lm2_predictors, collapse = " + "))
 )
 final_lm2_model = lm(final_lm2_formula, data_train)
-save(final_lm1_model, file = "Modelos Nico/final_lm2_model.RData")
-load("Modelos Nico/final_lm2_model.RData")
+save(final_lm2_model, file = "Modelos Nico/final_lm2_model.RData")
+load("Modelos/final_lm2_model.RData")
+
+final_lm2_predictors <- labels(terms(final_lm2_model))
 
 summary(final_lm2_model)
 anova(final_lm2_model)
-k_fold_cv_linear_model(final_lm2_formula, data_train)
+k_fold_cv_linear_model(final_lm2_model, data_train)
 check_multicollinearity(final_lm2_model, data_train)
 # Diagnostics
 par(mfrow = c(2, 2))
@@ -523,7 +527,7 @@ plot(final_lm2_model)
 
 
 ########################### GAM Models #########################################
-## Model 1 --- Manual selection after BIC --------------------------------------
+## Model 1 --- Manual selection after BIC + Tensorial geospace -----------------
 final_gam1_predictors <- final_lm1_predictors
 num_final_gam1_predictors <- final_gam1_predictors[1:6]
 cat_final_gam1_predictors <- final_gam1_predictors[7:12]
@@ -533,11 +537,11 @@ inter_final_gam1_predictors <- final_gam1_predictors[13]
 #log.sup.util will be implemented through the interaction
 num_final_gam1_predictors <- setdiff(num_final_gam1_predictors, c("latitud", "radius", "log.sup.util"))
 
-final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps')) +
-                          s(ref.hip.zona, k = 20, bs = 'ps') +
-                          s(Poca_limp, k = 20, bs = 'ps') +
-                          s(Pocas_zonas, k = 20, bs = 'ps') +
-                          s(log.sup.util, k = 20, bs = 'ps', by = comercial) +
+final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(20,20), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pocas_zonas, k = 15, bs = 'ps') +
+                          s(log.sup.util, k = 15, bs = 'ps', by = comercial) +
                           dorm + 
                           banos +
                           ascensor +
@@ -545,8 +549,159 @@ final_gam1_model <- gam(y ~ te(latitud, longitud, k = c(40,40), bs = c('ps', 'ps
                           comercial +
                           tipo.casa, method = "REML", data=data_train, select=FALSE)
 summary(final_gam1_model)
+save(final_gam1_model, file = "Modelos Nico/final_gam1_model.RData")
+load("Modelos/final_gam1_model.RData")
+k_fold_cv_gam_model(final_gam1_model, data_train)
+
+## Model 2 --- Manual selection after BIC --------------------------------------
+final_gam2_model <- gam(y ~ latitud +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          Poca_limp +
+                          s(Pocas_zonas, k = 15, bs = 'ps') +
+                          radius +
+                          log.sup.util +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa +
+                          log.sup.util:comercial, method = "REML", data=data_train, select=FALSE)
+summary(final_gam2_model)
+save(final_gam2_model, file = "Modelos Nico/final_gam2_model.RData")
+load("Modelos/final_gam2_model.RData")
+k_fold_cv_gam_model(final_gam2_model, data_train)
+
+## Model 3 ----------- Sparse AIC + Tensorial geospace -------------------------
+final_lm2_predictors
+# we disregard Pobl.0_14_div_Poblac.Total:comercial, tipo casa is more significant
+# and log.sup.util:comercial, banos is more significant
+final_gam3_model <- gam(y ~ te(latitud, longitud, k = c(20,20), bs = c('ps', 'ps')) +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(antig, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pobl.0_14_div_Poblac.Total, k = 15, bs = 'ps', by = tipo.casa) +
+                          s(log.sup.util, k = 15, bs = 'ps', by = banos) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam3_model)
+save(final_gam3_model, file = "Modelos Nico/final_gam3_model.RData")
+load("Modelos/final_gam3_model.RData")
+
+
+## Model 4 ----------- Sparse AIC ----------------------------------------------
+final_lm2_predictors
+# we disregard Pobl.0_14_div_Poblac.Total:comercial, tipo casa is more significant
+# and log.sup.util:comercial, banos is more significant
+final_gam4_model <- gam(y ~ s(latitud, k = 20, bs = 'ps') +
+                          s(ref.hip.zona, k = 15, bs = 'ps') +
+                          s(antig, k = 15, bs = 'ps') +
+                          s(Poca_limp, k = 15, bs = 'ps') +
+                          s(Pobl.0_14_div_Poblac.Total, k = 15, bs = 'ps', by = tipo.casa) +
+                          s(radius, k = 20, bs = 'ps') +
+                          s(log.sup.util, k = 15, bs = 'ps', by = banos) +
+                          dorm + 
+                          banos +
+                          ascensor +
+                          estado +
+                          comercial +
+                          tipo.casa, method = "REML", data=data_train, select=FALSE)
+summary(final_gam4_model)
+save(final_gam4_model, file = "Modelos Nico/final_gam4_model.RData")
+load("Modelos/final_gam4_model.RData")
+
+## Best GAM ====================================================================
+## The best (a priori) model is Model 4 ---> Let's linearize those terms which have
+## edf < 2 : latitud, antig, poca_limp , radius and log.sup.util:banos
+## The kept smooth terms are ref.hip.zonas and Pobl.0_14_div_Poblac.Total:tipo.casa
+final_gam_model <- gam(y ~ latitud +
+                         s(ref.hip.zona, k = 15, bs = 'ps') +
+                         Poca_limp +
+                         s(Pocas_zonas, k = 15, bs = 'ps') +
+                         radius +
+                         log.sup.util +
+                         dorm + 
+                         banos +
+                         ascensor +
+                         estado +
+                         comercial +
+                         tipo.casa +
+                         log.sup.util:comercial, method = "REML", data=data_train, select=FALSE)
+summary(final_gam_model)
+save(final_gam_model, file = "Modelos/final_gam_model.RData")
+load("Modelos/final_gam_model.RData")
+
+## Cross-Validation for GAMs
+fit_gam_model = function(formula, data_train){
+  formula <- as.formula(formula)
+  model = gam(formula, method = "REML", data = data_train, select=TRUE)
+  summary(model)
+  return(model)
+}
 
 
 
+fit_gam_model(final_gam_model, data_train)
 
+k_fold_cv_gam_model <- function(model_formula, 
+                                data_train,
+                                k=4){
+  cat("=== Running k_fold Cross Validation --- GAM === \n")
+  
+  # Create the K-fold partition
+  folded_data <- k_fold(data_train,k)$.folds
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_y <- numeric(k)
+  
+  # Initialize a vector to store each fold's rsme
+  cv_rmse_logy <- numeric(k)
+  
+  # Initialize a vector to store each fold's Rsq_adj
+  cv_rsq_adj_logy <- numeric(k)
+  
+  for (i in 1:k){
+    # Create the fold's test/train split
+    temp_train <- data_train[which(folded_data!=i),]
+    temp_test <- data_train[which(folded_data==i),]
+    
+    # Fit the model and make predictions
+    temp_model <- fit_gam_model(model_formula, temp_train)
+    temp_predictions <- predict(temp_model, newdata = temp_test)
+    
+    ## Calculate error metrics and store them
+    
+    # RsqAdj in log(y)
+    n_test = nrow(temp_test)
+    residual_edf = n_test - sum(temp_model$ecdf) 
+    
+    SSE = sum((temp_test$y - temp_predictions)^2)
+    SST = sum((mean(temp_test$y) - temp_test$y)^2)
+    
+    cv_rsq_adj_logy[i] = 1 - (SSE/(residual_edf))/(SST/(n_test-1))
+    
+    # RMSE in log(y)
+    cv_rmse_logy[i] <- sqrt(SSE/n_test)
+    
+    # RMSE in y
+    SSE_exp = sum((exp(temp_test$y) - exp(temp_predictions))^2)
+    cv_rmse_y[i] <- sqrt(SSE_exp/n_test)
+  }
+  
+  # Return the vector with rmse for each k-fold
+  return(list(cv_rmse_y=cv_rmse_y,
+              mean_cv_rmse_y = mean(cv_rmse_y),
+              cv_rmse_logy=cv_rmse_logy,
+              mean_cv_rmse_logy = mean(cv_rmse_logy),
+              cv_rsq_adj_logy=cv_rsq_adj_logy,
+              mean_cv_rsq_adj_logy = mean(cv_rsq_adj_logy)
+  ))
+}
 
+k_fold_cv_gam_model(final_gam_model, data_train)
+
+plot(final_gam_model, se = 2, shade =TRUE, resid = TRUE, pages = 1)
