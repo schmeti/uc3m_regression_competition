@@ -185,8 +185,7 @@ predicted_values <- predict(fit.ridge, newx = X_test, type = "response", s = opt
 print(predicted_values)
 
 # Optionally save predicted values
-write.csv(predicted_values, "predicted_prices.csv", row.names = FALSE)
-
+# write.csv(predicted_values, "predicted_prices.csv", row.names = FALSE)
 
 
 k_fold_cv_ridge <- function(data_train, k = 4, alpha = 0) {
