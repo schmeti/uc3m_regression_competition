@@ -5,7 +5,7 @@ library(dplyr)
 
 # Read and preprocess the training and test datasets
 data_train <- read_excel("Data/data_train.xlsx") %>% preprocess()
-data_test <- read_excel("Data/data_test_tryout.xlsx") %>% preprocess()
+data_test <- read_excel("Data/data_test.xlsx") %>% preprocess()
 data_test$test_indices = NULL
 
 # Generate regression matrix for training
