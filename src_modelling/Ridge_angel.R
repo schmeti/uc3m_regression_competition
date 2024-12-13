@@ -199,7 +199,7 @@ k_fold_cv_ridge <- function(data_train, k = 4, alpha = 0) {
   cv_rmse_logy <- numeric(k)
   cv_rsq_adj_logy <- numeric(k)
   
-  X = model.matrix(y ~ ., data = data_train)
+  X = model.matrix(y ~ . - 1, data = data_train)
   y = data_train$y
   opt_lambda <- cv.glmnet(X, y, alpha = alpha)$lambda.min
   
